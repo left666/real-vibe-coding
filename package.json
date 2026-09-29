@@ -1,0 +1,48 @@
+{
+	"name": "pi-code-dance",
+	"version": "0.1.0",
+	"description": "A Pi extension that performs the agent's output — prose, reasoning and tool text alike — in time with MIDI music: a beat-synced stage panel, a look-ahead print queue, and a pluggable audio backend.",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"pi-extension",
+		"midi",
+		"music",
+		"tui"
+	],
+	"license": "MIT",
+	"files": [
+		"extensions/",
+		"music/",
+		"README.zh-CN.md"
+	],
+	"scripts": {
+		"test": "node --test \"tests/*.test.ts\"",
+		"typecheck": "tsc --noEmit"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions/code-dance/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=0.81",
+		"@earendil-works/pi-tui": ">=0.81"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-coding-agent": {
+			"optional": true
+		},
+		"@earendil-works/pi-tui": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "^0.87.1",
+		"@earendil-works/pi-tui": "^0.87.1",
+		"@types/node": "^22.0.0",
+		"typescript": "^5.5.0"
+	}
+}
