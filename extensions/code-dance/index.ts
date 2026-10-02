@@ -11,7 +11,9 @@
  *    so a session restored later — or the transcript after the hand-back — shows
  *    the real text.
  * 2. A widget above the editor performs the queue on the onsets of a MIDI track
- *    while its `.wav` plays beside it.
+ *    while its `.wav` plays beside it. It is mounted with the task's first
+ *    output and taken down when the performance ends, so an idle screen has no
+ *    stage on it.
  *
  * The queue runs *ahead* of the music: prose and reasoning deltas are enqueued as
  * they stream, a tool call's line from `tool_execution_start` (the transformer
@@ -39,6 +41,8 @@ import type { Stage } from "./stage.ts";
 import { installStage } from "./stage.ts";
 
 const WIDGET_KEY = "code-dance";
+/** The footer marker; a key space of its own, shared with nothing. */
+const STATUS_KEY = "code-dance";
 
 /** The stage's view before a track starts. */
 const IDLE_VIEW: StageView = {
@@ -62,6 +66,8 @@ export default function codeDance(pi: ExtensionAPI): void {
 	let performing = false;
 	/** The rest of this task is not performed — `ctrl+shift+d` was pressed. */
 	let skipped = false;
+	/** This task's performance broke down — a track that would not play — and is off. */
+	let failed = false;
 	let config: CodeDanceConfig = { ...DEFAULT_CONFIG };
 	let agentDir = "";
 	let tracks: readonly Track[] = [];
@@ -80,10 +86,10 @@ export default function codeDance(pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * The performance of a task ends: the stage goes back to waiting and the
-	 * transcript renders the real text again, because the parts are forgotten. An
-	 * old message repainted later cannot then be replaced by a notice for text
-	 * that is no longer on the stage.
+	 * The performance of a task ends: the stage comes down and the transcript
+	 * renders the real text again, because the parts are forgotten. An old message
+	 * repainted later cannot then be replaced by a notice for text that is no
+	 * longer on the stage.
 	 */
 	function handBack(): void {
 		const wasPerforming = performing;
@@ -92,12 +98,14 @@ export default function codeDance(pi: ExtensionAPI): void {
 		feed.reset();
 		mirror.clear();
 		if (wasPerforming) stage?.repaint();
+		hideStage();
 	}
 
 	/** Text into the queue. Nothing is output when there is nothing to print. */
 	function perform(text: string, whole = false): void {
-		if (text === "" || skipped) return;
+		if (text === "" || skipped || failed) return;
 		performing = true;
+		showStage();
 		engine?.feed(text, whole);
 	}
 
@@ -109,17 +117,38 @@ export default function codeDance(pi: ExtensionAPI): void {
 		});
 	}
 
+	/**
+	 * The stage exists only while a task is being performed: it is mounted on the
+	 * task's first output and unmounted when the performance ends, so it never
+	 * takes rows from the transcript just to sit there waiting.
+	 */
+	function showStage(): void {
+		if (!config.enabled || !lastCtx?.ui || stage) return;
+		stage = startStage(lastCtx.ui);
+	}
+
+	function hideStage(): void {
+		stage?.dispose();
+		stage = undefined;
+	}
+
+	/** The footer marker: there while the performance is armed, absent when it is not. */
+	function updateStatus(): void {
+		if (!lastCtx || lastCtx.mode !== "tui") return;
+		const ui = lastCtx.ui;
+		ui.setStatus(STATUS_KEY, config.enabled ? ui.theme.fg("accent", "♪ 演出模式") : undefined);
+	}
+
+	function clearStatus(): void {
+		if (lastCtx?.mode === "tui") lastCtx.ui.setStatus(STATUS_KEY, undefined);
+	}
+
 	/** The performance is switched on or off: stage, engine and transcript follow. */
 	function rearm(): void {
 		engine?.setEnabled(config.enabled);
-		if (config.enabled) {
-			if (lastCtx?.ui && !stage) stage = startStage(lastCtx.ui);
-			return;
-		}
+		if (config.enabled) return;
 		engine?.reset();
 		handBack();
-		stage?.dispose();
-		stage = undefined;
 	}
 
 	/** A change from the panel: it takes effect now, and is written down. */
@@ -142,6 +171,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 			});
 		}
 		if (enabledChanged) rearm();
+		updateStatus();
 		stage?.requestRender();
 	}
 
@@ -151,6 +181,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 		mirror.clear();
 		performing = false;
 		skipped = false;
+		failed = false;
 	}
 
 	// What Pi asks the transformer for: the prose of a message and each run of
@@ -171,9 +202,9 @@ export default function codeDance(pi: ExtensionAPI): void {
 		ensureConfigFile(agentDir);
 		config = loadConfig(agentDir, notify);
 		tracks = collectTracks([bundledMusicDir(), userMusicDir(agentDir)]);
+		updateStatus();
 
-		stage?.dispose();
-		stage = undefined;
+		hideStage();
 		engine?.stop();
 		backend?.stop();
 		backend = createAudioBackend(config.audioBackend, config.audioCommand);
@@ -183,12 +214,18 @@ export default function codeDance(pi: ExtensionAPI): void {
 			musicSyncOffsetMs: config.musicSyncOffsetMs,
 			backend,
 			onView: refresh,
-			onError: (message) => notify(message, "warning"),
+			onError: (message) => {
+				notify(message, "warning");
+				// A track that will not open or play is no reason to keep performing:
+				// what this task already queued is dropped with the stage.
+				failed = true;
+				engine?.queue.reset();
+				handBack();
+			},
 			onHandBack: handBack,
 		});
 		resetState();
 		engine.setEnabled(config.enabled);
-		if (config.enabled) stage = startStage(ctx.ui);
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -196,15 +233,16 @@ export default function codeDance(pi: ExtensionAPI): void {
 		engine = undefined;
 		backend?.stop();
 		backend = undefined;
-		stage?.dispose();
-		stage = undefined;
+		hideStage();
 		resetState();
+		clearStatus();
 		lastCtx = undefined;
 	});
 
 	pi.on("agent_start", async () => {
 		if (!engine) return;
 		skipped = false;
+		failed = false;
 		engine.onTaskStart();
 	});
 

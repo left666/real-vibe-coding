@@ -9,8 +9,8 @@
  *
  * A performance ends on `settled && queue.isEmpty`: the task must be over *and*
  * everything queued must have been printed. That stop is `finish()` — the stage
- * goes back to waiting and the text is handed to the transcript, the only place
- * a whole task's output fits.
+ * comes down and the text is handed to the transcript, the only place a whole
+ * task's output fits.
  *
  * The engine also holds the model back: while far more text is queued than the
  * music can print, `waitForCapacity` keeps the next request waiting, so a long
@@ -190,8 +190,8 @@ export class BeatEngine {
 
 	/**
 	 * Print everything still queued, cut the music, and end the performance here:
-	 * the reader asked for the rest of the task now, so the stage goes back to
-	 * waiting and the text goes to the transcript, the only place all of it fits.
+	 * the reader asked for the rest of the task now, so the stage comes down and
+	 * the text goes to the transcript, the only place all of it fits.
 	 */
 	flush(): void {
 		this.queue.drain();
@@ -226,9 +226,9 @@ export class BeatEngine {
 	}
 
 	/**
-	 * The task is over and the last line is out. The stage returns to its idle
-	 * view — a fixed-height window could only scroll a task's output past the
-	 * reader — and the hand-back is what lets the transcript show all of it.
+	 * The task is over and the last line is out. The hand-back is what takes the
+	 * stage down — a fixed-height window could only scroll a task's output past
+	 * the reader — and lets the transcript show all of it.
 	 */
 	private finish(): void {
 		this.queue.reset();
