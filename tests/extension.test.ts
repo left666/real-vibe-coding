@@ -58,6 +58,7 @@ test("the extension registers the whole surface it needs", () => {
 			"message_update",
 			"session_shutdown",
 			"session_start",
+			"tool_call",
 			"tool_execution_start",
 			"tool_result",
 		],
@@ -68,6 +69,23 @@ test("the extension registers the whole surface it needs", () => {
 		["ctrl+shift+d"],
 	);
 	assert.deepEqual(stub.commands, ["code-dance"]);
+});
+
+test("the guard refuses a command that would kill pi with the rest of node", async () => {
+	const stub = extension();
+	const handler = stub.events.get("tool_call")!;
+
+	const blocked = (await handler(
+		{ toolCallId: "call-1", toolName: "bash", input: { command: "taskkill //F //IM node.exe" } },
+		{},
+	)) as { block?: boolean; reason?: string };
+	assert.equal(blocked.block, true);
+	assert.match(blocked.reason!, /PID/);
+
+	// A kill that names its target — or an unrelated command — is let through.
+	const pid = { toolCallId: "call-2", toolName: "bash", input: { command: "taskkill //F //PID 1234" } };
+	assert.equal(await handler(pid, {}), undefined);
+	assert.equal(await handler({ toolCallId: "call-3", toolName: "bash", input: { command: "npm test" } }, {}), undefined);
 });
 
 test("the transformer stands aside until something is performed", () => {
@@ -108,6 +126,7 @@ test("outside a terminal session the extension only watches", async () => {
 			assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "hello" },
 		},
 		message_end: { message: { role: "assistant" } },
+		tool_call: { toolCallId: "call-1", toolName: "bash", input: { command: "npm test" } },
 		tool_execution_start: { toolCallId: "call-1", toolName: "read", args: { file_path: "a.ts" } },
 		tool_result: { toolCallId: "call-1", content: [{ type: "text", text: "output" }] },
 		agent_settled: {},

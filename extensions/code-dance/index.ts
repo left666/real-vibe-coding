@@ -43,6 +43,7 @@ import type { StageView } from "./engine.ts";
 import { BeatEngine } from "./engine.ts";
 import type { SealedUnit } from "./feed.ts";
 import { OutputFeed } from "./feed.ts";
+import { selfKillReason } from "./guard.ts";
 import type { Track } from "./library.ts";
 import { bundledMusicDir, collectTracks, trackTitle, userMusicDir } from "./library.ts";
 import { callLine, partKey, printingNotice, stagedNotice, toolCallText } from "./parts.ts";
@@ -426,6 +427,15 @@ export default function codeDance(pi: ExtensionAPI): void {
 		const text = resultText(event);
 		const end = engine.queue.total + text.length;
 		hold.close(event.toolCallId, text !== "" && perform(text) ? end : 0);
+	});
+
+	pi.on("tool_call", async (event) => {
+		// A command that kills by the image name `node` kills pi with it; the
+		// guard refuses those and says how to kill just the one process instead.
+		// It stands in every mode and with the performance off: what it protects
+		// is the session, not the show.
+		const reason = selfKillReason(event.toolName, event.input);
+		return reason === undefined ? undefined : { block: true, reason };
 	});
 
 	pi.on("agent_settled", async () => {
