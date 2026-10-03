@@ -1,10 +1,11 @@
 /**
  * The stage: the widget above the editor where the queue is performed.
  *
- * Exactly `stageHeight` rows — a header, the meter, and the tail of the text
- * printed so far. Only the tail: the panel's height is fixed, so a whole task's
- * output can only pass through it, never sit in it. New lines appear at the
- * bottom edge and the older ones slide up out of the panel.
+ * Exactly `stageHeight` rows — a header, the meter, a line of activity while
+ * the queue is dry, and the tail of the text printed so far. Only the tail: the
+ * panel's height is fixed, so a whole task's output can only pass through it,
+ * never sit in it. New lines appear at the bottom edge and the older ones slide
+ * up out of the panel.
  *
  * The meter is a row of columns that ripple in place. It is full width from the
  * first beat — nothing grows out of one end, nothing scrolls, nothing
@@ -12,6 +13,10 @@
  * of the most recent onset sets how tall the wave is, the strike surges it, and
  * it falls back between beats. The wave travels with the tempo, so the row is
  * never still while a track plays.
+ *
+ * Between songs there is nothing to ripple against: while the queue is dry, a
+ * line under the meter says what the performance is waiting on, so the panel
+ * never reads as stopped.
  */
 
 import type { ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
@@ -109,6 +114,8 @@ export interface StageOptions {
 	view(): StageView;
 	text(): string;
 	height(): number;
+	/** The line under the meter while nothing is printing; "" hides the row and gives it back to the text. */
+	activity?(): string;
 	/** Wall clock in milliseconds; injected by tests. */
 	now?: () => number;
 }
@@ -145,7 +152,11 @@ class StageComponent implements Component {
 	render(width: number): string[] {
 		const view = this.options.view();
 		const height = Math.max(CHROME_ROWS, Math.floor(this.options.height()));
-		const rows = height - CHROME_ROWS;
+		// The activity row is the text's to lose: it only borrows a row when the
+		// panel can spare one and still show a line of text.
+		const activity = this.options.activity?.() ?? "";
+		const onStage = activity !== "" && height > CHROME_ROWS + 1;
+		const rows = height - CHROME_ROWS - (onStage ? 1 : 0);
 		const lines: string[] = [];
 
 		if (view.title === "") {
@@ -159,6 +170,7 @@ class StageComponent implements Component {
 		}
 
 		lines.push(truncateToWidth(this.theme.fg("accent", meter(view, width, this.travel(view))), width, "", true));
+		if (onStage) lines.push(truncateToWidth(this.theme.fg("dim", activity), width, "", true));
 
 		const tail = this.tailRows(this.options.text(), width, rows);
 		// Anchored to the bottom: the newest line is always the panel's last, so

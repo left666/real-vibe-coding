@@ -140,6 +140,56 @@ test("the newest line is the panel's last", () => {
 	assert.deepEqual(lines.slice(2), ["", " 1 │ a", " 2 │ b"]);
 });
 
+test("the activity line takes a row under the meter, and the tail keeps the bottom", () => {
+	const { component } = harness({
+		view: () => view({ title: "Tune" }),
+		text: () => "a\nb",
+		height: () => 6,
+		activity: () => "⏳ read a.ts · 3s",
+	});
+	const lines = component.render(40);
+
+	assert.equal(lines.length, 6);
+	assert.equal(lines[2]!.trimEnd(), "⏳ read a.ts · 3s");
+	// Three text rows now: a blank, then the tail still at the bottom.
+	assert.deepEqual(lines.slice(3), ["", " 1 │ a", " 2 │ b"]);
+});
+
+test("an empty activity line leaves the row to the text", () => {
+	const { component } = harness({
+		view: () => view({ title: "Tune" }),
+		text: () => "a\nb",
+		height: () => 4,
+		activity: () => "",
+	});
+	const lines = component.render(40);
+
+	assert.equal(lines.length, 4);
+	assert.deepEqual(lines.slice(2), [" 1 │ a", " 2 │ b"]);
+});
+
+test("the activity line yields when the panel is too short for it", () => {
+	const at = (height: number) =>
+		harness({
+			view: () => view(),
+			text: () => "a",
+			height: () => height,
+			activity: () => "⏳ read a.ts · 3s",
+		}).component.render(40);
+
+	// Three rows — the panel's floor — is header, meter and one line of text: the
+	// activity row may not take that line.
+	const floor = at(3);
+	assert.equal(floor.length, 3);
+	assert.equal(floor[2], " 1 │ a");
+
+	// One row taller: the wait is named, and the text keeps a row.
+	const roomy = at(4);
+	assert.equal(roomy.length, 4);
+	assert.equal(roomy[2]!.trimEnd(), "⏳ read a.ts · 3s");
+	assert.equal(roomy[3], " 1 │ a");
+});
+
 test("only the tail of a long text is wrapped into the panel", () => {
 	const text = Array.from({ length: 50 }, (_, index) => `line ${index + 1}`).join("\n");
 	const { component } = harness({ view: () => view({ title: "Tune" }), text: () => text, height: () => 5 });

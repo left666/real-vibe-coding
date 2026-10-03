@@ -69,14 +69,24 @@ function describe(text: string): string {
 	return `${countLines(text)} 行 · ${text.length} 字`;
 }
 
-/** Stands in for a part the stage has finished printing. */
-export function playedNotice(text: string): string {
-	return `▶ 已按节奏播放 · ${describe(text)}`;
+/** Stands in for a part the stage is performing: queued, not yet fully printed. */
+export function stagedNotice(text: string): string {
+	return `▶ 演出中 · ${describe(text)}`;
 }
 
 /** Stands in for a part that is still streaming — it may not have reached the stage yet. */
 export function printingNotice(text: string): string {
 	return `▶ 打印中 · ${describe(text)}`;
+}
+
+/** Stands in for a tool call's block, naming the call — a call has no length to describe. */
+export function stagedCall(line: string): string {
+	return `▶ 演出中 · ${line}`;
+}
+
+/** Stands in for a tool call whose block is drawn before its line has reached the queue. */
+export function printingCall(line: string): string {
+	return `▶ 打印中 · ${line}`;
 }
 
 function firstString(fields: Record<string, unknown>, keys: readonly string[]): string {
@@ -124,4 +134,13 @@ export function toolCallText(toolName: string, args: unknown, previous: string):
 			return json === "{}" ? `${opening}${toolName}\n` : `${opening}${toolName} ${json}\n`;
 		}
 	}
+}
+
+/** A notice or a status stays one line: an argument can hold newlines and go on for pages. */
+const LONGEST_CALL_LINE = 100;
+
+/** One line naming a tool call, for the places that stand in for one. */
+export function callLine(toolName: string, args: unknown, previous = ""): string {
+	const line = toolCallText(toolName, args, previous).trim().split("\n")[0] ?? "";
+	return line.length <= LONGEST_CALL_LINE ? line : `${line.slice(0, LONGEST_CALL_LINE - 1)}…`;
 }

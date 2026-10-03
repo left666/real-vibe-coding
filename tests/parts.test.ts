@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { countLines, partKey, performedParts, playedNotice, printingNotice, toolCallText } from "../extensions/code-dance/parts.ts";
+import { callLine, countLines, partKey, performedParts, printingCall, printingNotice, stagedCall, stagedNotice, toolCallText } from "../extensions/code-dance/parts.ts";
 
 test("partKey is stable, short and distinct", () => {
 	assert.equal(partKey("hello"), partKey("hello"));
@@ -68,8 +68,13 @@ test("performedParts: junk content yields nothing", () => {
 });
 
 test("the notices describe the part they stand in for", () => {
-	assert.equal(playedNotice("a\nb"), "▶ 已按节奏播放 · 2 行 · 3 字");
+	assert.equal(stagedNotice("a\nb"), "▶ 演出中 · 2 行 · 3 字");
 	assert.equal(printingNotice("a"), "▶ 打印中 · 1 行 · 1 字");
+});
+
+test("the call notices name the line instead of measuring it", () => {
+	assert.equal(stagedCall("read a.ts"), "▶ 演出中 · read a.ts");
+	assert.equal(printingCall("$ ls -la"), "▶ 打印中 · $ ls -la");
 });
 
 test("toolCallText: shell calls are shown as the shell", () => {
@@ -98,4 +103,14 @@ test("toolCallText: an unknown tool shows its arguments", () => {
 test("toolCallText opens a line of its own unless one just ended", () => {
 	assert.equal(toolCallText("bash", { command: "x" }, "abc"), "\n$ x\n");
 	assert.equal(toolCallText("bash", { command: "x" }, "\n"), "$ x\n");
+});
+
+test("callLine is one line, clipped", () => {
+	assert.equal(callLine("read", { file_path: "a.ts" }), "read a.ts");
+	assert.equal(callLine("bash", { command: "ls -la\ncat a" }), "$ ls -la");
+
+	const long = callLine("bash", { command: "a".repeat(200) });
+	assert.equal(long.length, 100);
+	assert.ok(long.endsWith("…"));
+	assert.ok(long.startsWith("$ aaa"));
 });

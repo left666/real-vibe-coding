@@ -163,18 +163,21 @@ export class BeatEngine {
 	/**
 	 * Producer side: text ready to print. Starts the music on the first call of a
 	 * task. `whole` marks a chunk the reveal may not cut through — a provider
-	 * delta, one token.
+	 * delta, one token. Returns whether the text was taken: a switched-off engine
+	 * takes nothing, and the caller needs to know, because it is the caller that
+	 * records where in the queue the text went.
 	 */
-	feed(text: string, whole = false): void {
-		if (!this.enabled || text.length === 0) return;
+	feed(text: string, whole = false): boolean {
+		if (!this.enabled || text.length === 0) return false;
 		this.queue.push(text, whole);
 
-		if (this.playing) return;
-
-		this.playing = true;
-		this.run += 1;
-		this.frameTimer = setInterval(() => this.frame(), FRAME_MS);
-		void this.playTracks(this.run);
+		if (!this.playing) {
+			this.playing = true;
+			this.run += 1;
+			this.frameTimer = setInterval(() => this.frame(), FRAME_MS);
+			void this.playTracks(this.run);
+		}
+		return true;
 	}
 
 	/**
