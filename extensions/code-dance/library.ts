@@ -8,7 +8,7 @@
  */
 
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface Track {
@@ -16,6 +16,13 @@ export interface Track {
 	midi: string;
 	/** Sibling `.wav` of the same name, when there is one. */
 	audio?: string;
+}
+
+/** `Night Cruising.mid` -> `Night Cruising`: the name the stage and the settings show. */
+export function trackTitle(midiPath: string): string {
+	const name = basename(midiPath);
+	const dot = name.lastIndexOf(".");
+	return dot > 0 ? name.slice(0, dot) : name;
 }
 
 const MIDI_EXTENSIONS = [".mid", ".midi"] as const;

@@ -21,6 +21,7 @@ after(() => {
 test("the defaults are a working performance", () => {
 	assert.equal(DEFAULT_CONFIG.enabled, true);
 	assert.equal(DEFAULT_CONFIG.playlistMode, "sequential");
+	assert.equal(DEFAULT_CONFIG.loopTrack, "");
 	assert.equal(DEFAULT_CONFIG.stageHeight, 12);
 	assert.equal(DEFAULT_CONFIG.showPlaceholder, true);
 	assert.equal(DEFAULT_CONFIG.audioCommand, 'ffplay -nodisp -autoexit "{file}"');
@@ -40,6 +41,7 @@ test("every field is validated on its own", () => {
 	const config = normalizeConfig({
 		enabled: "yes",
 		playlistMode: "random",
+		loopTrack: 42,
 		stageHeight: "20",
 		showPlaceholder: 1,
 		audioBackend: "alsa",
@@ -50,6 +52,7 @@ test("every field is validated on its own", () => {
 	// Only a real boolean counts as a choice; the rest fall back one by one.
 	assert.equal(config.enabled, true);
 	assert.equal(config.playlistMode, "sequential");
+	assert.equal(config.loopTrack, "");
 	assert.equal(config.stageHeight, 12);
 	assert.equal(config.showPlaceholder, true);
 	assert.equal(config.audioBackend, DEFAULT_CONFIG.audioBackend);
@@ -61,6 +64,7 @@ test("a valid config is passed through, with the panel's floor and ceiling", () 
 	const config = normalizeConfig({
 		enabled: false,
 		playlistMode: "loop-one",
+		loopTrack: "Night Cruising",
 		stageHeight: 1,
 		showPlaceholder: false,
 		audioBackend: "command",
@@ -70,6 +74,7 @@ test("a valid config is passed through, with the panel's floor and ceiling", () 
 
 	assert.equal(config.enabled, false);
 	assert.equal(config.playlistMode, "loop-one");
+	assert.equal(config.loopTrack, "Night Cruising");
 	// Three rows is the header, the meter and one line of text.
 	assert.equal(config.stageHeight, 3);
 	assert.equal(config.showPlaceholder, false);

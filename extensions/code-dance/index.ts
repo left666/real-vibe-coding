@@ -34,7 +34,7 @@ import { BeatEngine } from "./engine.ts";
 import { ExpansionMirror } from "./expansion.ts";
 import { OutputFeed } from "./feed.ts";
 import type { Track } from "./library.ts";
-import { bundledMusicDir, collectTracks, userMusicDir } from "./library.ts";
+import { bundledMusicDir, collectTracks, trackTitle, userMusicDir } from "./library.ts";
 import { partKey, playedNotice, printingNotice, toolCallText } from "./parts.ts";
 import { registerSettingsCommand } from "./settings.ts";
 import type { Stage } from "./stage.ts";
@@ -166,6 +166,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 			engine.configure({
 				tracks,
 				mode: config.playlistMode,
+				loopTrack: config.loopTrack,
 				musicSyncOffsetMs: config.musicSyncOffsetMs,
 				backend,
 			});
@@ -211,6 +212,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 		engine = new BeatEngine({
 			tracks,
 			mode: config.playlistMode,
+			loopTrack: config.loopTrack,
 			musicSyncOffsetMs: config.musicSyncOffsetMs,
 			backend,
 			onView: refresh,
@@ -306,7 +308,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 
 	registerSettingsCommand(pi, {
 		getConfig: () => config,
-		getTrackCount: () => tracks.length,
+		getTrackNames: () => tracks.map((track) => trackTitle(track.midi)),
 		onConfigChanged: applyConfig,
 	});
 }

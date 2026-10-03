@@ -20,6 +20,8 @@ export interface CodeDanceConfig {
 	/** Off: nothing is performed and the transcript renders as usual. */
 	enabled: boolean;
 	playlistMode: PlaylistMode;
+	/** The title of the track loop-one repeats; "" is the library's first. */
+	loopTrack: string;
 	/** Rows the stage panel occupies, the header and the meter included. */
 	stageHeight: number;
 	/** Stand in for performed prose and reasoning with a one-line notice. */
@@ -39,6 +41,7 @@ export const CONFIG_FILE = "code-dance.json";
 export const DEFAULT_CONFIG: CodeDanceConfig = {
 	enabled: true,
 	playlistMode: "sequential",
+	loopTrack: "",
 	stageHeight: 12,
 	showPlaceholder: true,
 	audioBackend: process.platform === "win32" ? "wav-soundplayer" : "command",
@@ -81,6 +84,7 @@ export function normalizeConfig(raw: unknown): CodeDanceConfig {
 	return {
 		enabled: asBoolean(source.enabled, DEFAULT_CONFIG.enabled),
 		playlistMode: asMode(source.playlistMode),
+		loopTrack: asString(source.loopTrack, DEFAULT_CONFIG.loopTrack),
 		// Three rows is the panel's own floor: header, meter, one line of text.
 		stageHeight: asInt(source.stageHeight, 3, 60, DEFAULT_CONFIG.stageHeight),
 		showPlaceholder: asBoolean(source.showPlaceholder, DEFAULT_CONFIG.showPlaceholder),

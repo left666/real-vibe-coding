@@ -8,8 +8,8 @@
  */
 
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import type { Component, SettingItem, SettingsListTheme, TUI } from "@earendil-works/pi-tui";
-import { Box, Input, SettingsList, Text } from "@earendil-works/pi-tui";
+import type { Component, SelectListTheme, SettingItem, SettingsListTheme, TUI } from "@earendil-works/pi-tui";
+import { Box, Input, SelectList, SettingsList, Text } from "@earendil-works/pi-tui";
 
 import type { AudioBackendKind, CodeDanceConfig } from "./config.ts";
 import { AUDIO_BACKENDS, normalizeConfig } from "./config.ts";
@@ -21,6 +21,8 @@ const OFF = "关闭";
 const MODES: readonly PlaylistMode[] = ["sequential", "shuffle", "loop-one"];
 /** The value the panel shows, and the value it writes back, are the same string. */
 const HINT = "Enter 确认 · Esc 取消";
+/** Tracks the picker shows at once before it starts scrolling. */
+const PICKER_ROWS = 10;
 
 interface Row {
 	id: keyof CodeDanceConfig;
@@ -30,8 +32,10 @@ interface Row {
 	value: (config: CodeDanceConfig) => string;
 	/** Turn a shown value back into a config. Coercion happens here, once, for both editors. */
 	apply: (config: CodeDanceConfig, value: string) => CodeDanceConfig;
-	/** Rows that cycle through these instead of opening a field. */
+	/** Rows that cycle through these on Enter instead of opening a submenu. */
 	values?: readonly string[];
+	/** Rows whose submenu is a list of choices to pick among, not an edit field. */
+	picker?: boolean;
 	/** The kind of field to open when the row has no `values`. */
 	input?: "number" | "text";
 }
@@ -51,42 +55,57 @@ function modeOf(label: string): PlaylistMode {
 	return MODES.find((mode) => MODE_LABELS[mode] === label) ?? "sequential";
 }
 
-const ROWS: readonly Row[] = [
-	toggleRow("enabled", "启用", "关闭整个演出，代码恢复为正常渲染。"),
-	{
-		id: "playlistMode",
-		label: "播放模式",
-		description: "一首放完之后接着放哪一首。",
-		values: MODES.map((mode) => MODE_LABELS[mode]),
-		value: (config) => MODE_LABELS[config.playlistMode],
-		apply: (config, value) => normalizeConfig({ ...config, playlistMode: modeOf(value) }),
-	},
-	{
-		id: "stageHeight",
-		label: "舞台高度（行）",
-		description: "舞台面板占用的行数，其中两行是标题和力度条。",
-		input: "number",
-		value: (config) => String(config.stageHeight),
-		apply: (config, value) => normalizeConfig({ ...config, stageHeight: Number(value) }),
-	},
-	toggleRow("showPlaceholder", "保留占位行", "演出时在会话记录里用一行占位提示顶替正文和思考，演出结束后变回正文。"),
-	{
-		id: "audioBackend",
-		label: "音频后端",
-		description: "wav-soundplayer 用 PowerShell 播放 .wav；command 执行下面的命令模板。",
-		values: [...AUDIO_BACKENDS],
-		value: (config) => config.audioBackend,
-		apply: (config, value) => normalizeConfig({ ...config, audioBackend: value as AudioBackendKind }),
-	},
-	{
-		id: "audioCommand",
-		label: "命令模板",
-		description: "command 后端的 argv 模板，其中 {file} 会替换成媒体路径。",
-		input: "text",
-		value: (config) => config.audioCommand,
-		apply: (config, value) => normalizeConfig({ ...config, audioCommand: value }),
-	},
-];
+/** The loop-one pick: the row opens a second-level list of the track titles. */
+function loopRow(names: readonly string[]): Row {
+	return {
+		id: "loopTrack",
+		label: "循环曲目",
+		description: "单曲循环模式下重复的那一首。",
+		picker: true,
+		value: (config) => names.find((name) => name.toLowerCase() === config.loopTrack.toLowerCase()) ?? names[0]!,
+		apply: (config, value) => normalizeConfig({ ...config, loopTrack: value }),
+	};
+}
+
+function rowsFor(names: readonly string[]): Row[] {
+	return [
+		toggleRow("enabled", "启用", "关闭整个演出，代码恢复为正常渲染。"),
+		{
+			id: "playlistMode",
+			label: "播放模式",
+			description: "一首放完之后接着放哪一首。",
+			values: MODES.map((mode) => MODE_LABELS[mode]),
+			value: (config) => MODE_LABELS[config.playlistMode],
+			apply: (config, value) => normalizeConfig({ ...config, playlistMode: modeOf(value) }),
+		},
+		...(names.length > 0 ? [loopRow(names)] : []),
+		{
+			id: "stageHeight",
+			label: "舞台高度（行）",
+			description: "舞台面板占用的行数，其中两行是标题和力度条。",
+			input: "number",
+			value: (config) => String(config.stageHeight),
+			apply: (config, value) => normalizeConfig({ ...config, stageHeight: Number(value) }),
+		},
+		toggleRow("showPlaceholder", "保留占位行", "演出时在会话记录里用一行占位提示顶替正文和思考，演出结束后变回正文。"),
+		{
+			id: "audioBackend",
+			label: "音频后端",
+			description: "wav-soundplayer 用 PowerShell 播放 .wav；command 执行下面的命令模板。",
+			values: [...AUDIO_BACKENDS],
+			value: (config) => config.audioBackend,
+			apply: (config, value) => normalizeConfig({ ...config, audioBackend: value as AudioBackendKind }),
+		},
+		{
+			id: "audioCommand",
+			label: "命令模板",
+			description: "command 后端的 argv 模板，其中 {file} 会替换成媒体路径。",
+			input: "text",
+			value: (config) => config.audioCommand,
+			apply: (config, value) => normalizeConfig({ ...config, audioCommand: value }),
+		},
+	];
+}
 
 /** One row's edit field: what is being edited, the input, and — if it does not take — why. */
 class EditField implements Component {
@@ -139,6 +158,54 @@ class EditField implements Component {
 	}
 }
 
+function pickerTheme(theme: Theme): SelectListTheme {
+	return {
+		selectedPrefix: (text) => theme.fg("accent", text),
+		selectedText: (text) => theme.fg("accent", text),
+		description: (text) => theme.fg("muted", text),
+		scrollInfo: (text) => theme.fg("dim", text),
+		noMatch: (text) => theme.fg("warning", text),
+	};
+}
+
+/**
+ * The loop-one pick's second level: the tracks as a list, the one in force
+ * already under the cursor. Enter takes the track, Esc keeps the current one.
+ */
+class TrackPicker implements Component {
+	private readonly label: string;
+	private readonly hint: string;
+	private readonly list: SelectList;
+
+	constructor(theme: Theme, label: string, names: readonly string[], current: string, done: (value?: string) => void) {
+		this.label = theme.fg("accent", label);
+		this.hint = theme.fg("dim", HINT);
+		this.list = new SelectList(
+			names.map((name) => ({ value: name, label: name })),
+			PICKER_ROWS,
+			pickerTheme(theme),
+		);
+		// The row shows the track in force — the first one when nothing is chosen —
+		// so the cursor starts there.
+		const at = names.findIndex((name) => name.toLowerCase() === current.toLowerCase());
+		this.list.setSelectedIndex(at === -1 ? 0 : at);
+		this.list.onSelect = (item) => done(item.value);
+		this.list.onCancel = () => done(undefined);
+	}
+
+	handleInput(data: string): void {
+		this.list.handleInput(data);
+	}
+
+	render(width: number): string[] {
+		return [this.label, ...this.list.render(width), this.hint];
+	}
+
+	invalidate(): void {
+		this.list.invalidate();
+	}
+}
+
 class Panel implements Component {
 	/** True while the panel itself is the TUI's focus. */
 	private hasFocus = false;
@@ -151,13 +218,13 @@ class Panel implements Component {
 	constructor(
 		theme: Theme,
 		config: CodeDanceConfig,
-		trackCount: number,
+		names: readonly string[],
 		onChange: (config: CodeDanceConfig) => void,
 		onClose: () => void,
 	) {
 		this.config = config;
 
-		const items: SettingItem[] = ROWS.map((row) => {
+		const items: SettingItem[] = rowsFor(names).map((row) => {
 			this.rows.set(row.id, row);
 			const item: SettingItem = {
 				id: row.id,
@@ -166,6 +233,7 @@ class Panel implements Component {
 				currentValue: row.value(config),
 			};
 			if (row.values) item.values = [...row.values];
+			else if (row.picker) item.submenu = (current, done) => new TrackPicker(theme, row.label, names, current, done);
 			else item.submenu = (current, done) => this.openField(theme, row, current, done);
 			return item;
 		});
@@ -185,7 +253,7 @@ class Panel implements Component {
 
 		this.box = new Box(1, 1, (line: string) => theme.bg("customMessageBg", line));
 		this.box.addChild(new Text(theme.bold(theme.fg("accent", "CodeDance 设置")), 0, 0));
-		this.box.addChild(new Text(theme.fg("dim", `已找到 ${trackCount} 首（.mid，同名 .wav 一并播放）`), 0, 0));
+		this.box.addChild(new Text(theme.fg("dim", `已找到 ${names.length} 首（.mid，同名 .wav 一并播放）`), 0, 0));
 		this.box.addChild(new Text("", 0, 0));
 		this.box.addChild(this.list);
 	}
@@ -244,7 +312,8 @@ function listTheme(theme: Theme): SettingsListTheme {
 
 export interface SettingsHooks {
 	getConfig(): CodeDanceConfig;
-	getTrackCount(): number;
+	/** Titles of the tracks in the library, in play order: the loop-one pick's options. */
+	getTrackNames(): readonly string[];
 	/** The change is already saved and live when this is called. */
 	onConfigChanged(config: CodeDanceConfig): void;
 }
@@ -260,7 +329,7 @@ export function registerSettingsCommand(pi: ExtensionAPI, hooks: SettingsHooks):
 					const panel = new Panel(
 						theme,
 						hooks.getConfig(),
-						hooks.getTrackCount(),
+						hooks.getTrackNames(),
 						(config) => hooks.onConfigChanged(config),
 						() => done(undefined),
 					);

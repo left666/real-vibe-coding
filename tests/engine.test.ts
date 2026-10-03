@@ -115,6 +115,7 @@ function rig(
 		tracks: readonly Track[];
 		backend?: Backend;
 		mode?: PlaylistMode;
+		loopTrack?: string;
 		musicSyncOffsetMs?: number;
 	},
 ): Rig {
@@ -129,6 +130,7 @@ function rig(
 	const engine = new BeatEngine({
 		tracks: options.tracks,
 		mode: options.mode ?? "sequential",
+		loopTrack: options.loopTrack ?? "",
 		musicSyncOffsetMs: options.musicSyncOffsetMs ?? 0,
 		backend: options.backend ?? silentBackend(),
 		onView: () => {
@@ -321,7 +323,7 @@ test("the mode in force is carried to the tracks as they open", async (t) => {
 	const second = midiTrack(dir, "Second", twoOnsets());
 	const { engine, titles, clock } = rig(t, { tracks: [first, second] });
 
-	engine.configure({ tracks: [first, second], mode: "loop-one", musicSyncOffsetMs: 0, backend: silentBackend() });
+	engine.configure({ tracks: [first, second], mode: "loop-one", loopTrack: "", musicSyncOffsetMs: 0, backend: silentBackend() });
 
 	engine.feed("ab", true);
 	await clock.tick(1_500);
@@ -329,6 +331,68 @@ test("the mode in force is carried to the tracks as they open", async (t) => {
 	// Every track open is the first one again.
 	assert.deepEqual(titles, ["First"]);
 	assert.equal(engine.view.mode, "loop-one");
+});
+
+test("sequential carries its place into the next task of a session", async (t) => {
+	const dir = scratch();
+	const { engine, titles, clock } = rig(t, {
+		tracks: [midiTrack(dir, "First", oneOnset()), midiTrack(dir, "Second", oneOnset())],
+	});
+
+	engine.feed("ab", true);
+	await settle();
+	assert.equal(engine.view.title, "First");
+
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, "ab");
+
+	engine.onTaskSettled();
+	assert.equal(engine.isPlaying, false);
+
+	// The same session's next task takes the next track, not the library's first.
+	engine.onTaskStart();
+	engine.feed("cd", true);
+	await settle();
+	assert.equal(engine.view.title, "Second");
+
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, "cd");
+	assert.deepEqual(titles, ["First", "Second"]);
+});
+
+test("loop-one repeats the track the settings choose", async (t) => {
+	const dir = scratch();
+	const first = midiTrack(dir, "First", oneOnset());
+	const second = midiTrack(dir, "Second", oneOnset());
+	const { engine, titles, clock } = rig(t, { tracks: [first, second], mode: "loop-one", loopTrack: "Second" });
+
+	engine.feed("ab", true);
+	await settle();
+	assert.equal(engine.view.title, "Second");
+
+	await clock.tick(0);
+	engine.onTaskSettled();
+	assert.equal(engine.isPlaying, false);
+
+	// The same one again, task after task.
+	engine.onTaskStart();
+	engine.feed("cd", true);
+	await settle();
+	assert.equal(engine.view.title, "Second");
+	assert.deepEqual(titles, ["Second"]);
+});
+
+test("a chosen track the library does not have falls back to the first", async (t) => {
+	const dir = scratch();
+	const { engine } = rig(t, {
+		tracks: [midiTrack(dir, "First", oneOnset()), midiTrack(dir, "Second", oneOnset())],
+		mode: "loop-one",
+		loopTrack: "Missing",
+	});
+
+	engine.feed("ab", true);
+	await settle();
+	assert.equal(engine.view.title, "First");
 });
 
 test("flush prints the rest at once and ends the performance", async (t) => {

@@ -85,6 +85,7 @@ CodeDance 有自带的曲库。
 {
   "enabled": true,
   "playlistMode": "sequential",
+  "loopTrack": "",
   "stageHeight": 12,
   "showPlaceholder": true,
   "audioBackend": "wav-soundplayer",
@@ -96,6 +97,7 @@ CodeDance 有自带的曲库。
 |---|---|
 | `enabled` | 关闭整个演出，代码恢复为正常渲染。 |
 | `playlistMode` | `sequential`（顺序）、`shuffle`（随机）、`loop-one`（单曲循环）。 |
+| `loopTrack` | 单曲循环模式下重复的曲目，用曲名（`.mid` 文件名去掉扩展名）；空表示曲库第一首。 |
 | `stageHeight` | 舞台面板占用的行数，其中两行是标题和力度条。 |
 | `showPlaceholder` | 是否在会话记录里用一行占位提示替换已演出的正文和思考。 |
 | `audioBackend` | `wav-soundplayer` 或 `command`。 |
@@ -168,6 +170,9 @@ Pi 没有替换助手消息渲染器的 API，也没有延迟 token 流的手段
 出现。思考期间音乐继续播放；一首放完自动续下一首；只有任务已经收尾**且**队列
 已吐空时才停止。这一次停止同时也是把已打印的文本交还会话记录、并撤下舞台的
 时刻：面板只存在于演出期间，空闲时一行也不占。
+
+播放列表按会话记住位置：顺序和随机模式下，同一个会话里的下一次任务接着上一首
+停下的地方继续，而不是从曲库开头重来；单曲循环重复的那一首在设置面板里选择。
 
 ## 已知限制
 

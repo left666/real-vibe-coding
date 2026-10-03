@@ -22,6 +22,7 @@ import { basename } from "node:path";
 
 import type { AudioBackend } from "./audio.ts";
 import type { Track } from "./library.ts";
+import { trackTitle } from "./library.ts";
 import { readTimeline } from "./midi.ts";
 import type { Onset, Timeline } from "./midi.ts";
 import { Playlist } from "./playlist.ts";
@@ -65,6 +66,8 @@ const RELEASE_BACKLOG_CHARS = 600;
 export interface EngineSettings {
 	tracks: readonly Track[];
 	mode: PlaylistMode;
+	/** The title loop-one repeats; "" is the library's first track. */
+	loopTrack: string;
 	/** Absorbs the player's process-start latency, so the print tracks the sound. */
 	musicSyncOffsetMs: number;
 	backend: AudioBackend;
@@ -89,13 +92,6 @@ function describe(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** `Night Cruising.mid` -> `Night Cruising`. */
-function trackTitle(path: string): string {
-	const name = basename(path);
-	const dot = name.lastIndexOf(".");
-	return dot > 0 ? name.slice(0, dot) : name;
-}
-
 export class BeatEngine {
 	readonly queue = new PrintQueue();
 	readonly view: StageView = idleView();
@@ -112,6 +108,13 @@ export class BeatEngine {
 	private warnedMissingTracks = false;
 	/** Requests parked in `waitForCapacity`, to be let go once the printing catches up. */
 	private parked: (() => void)[] = [];
+
+	/**
+	 * The session's place in the library. One playlist per engine: a finished task
+	 * leaves it where it stopped, so the next task of the same session takes the
+	 * next track instead of starting the library over.
+	 */
+	private playlist: Playlist<Track> | null = null;
 
 	/** Identifies the run the timers and the track loop belong to. */
 	private run = 0;
@@ -139,7 +142,14 @@ export class BeatEngine {
 	}
 
 	configure(settings: EngineSettings): void {
+		// A change of order starts the walk over; the other settings leave the place
+		// alone, so switching the backend mid-session does not lose it.
+		const restart =
+			settings.tracks !== this.settings.tracks ||
+			settings.mode !== this.settings.mode ||
+			settings.loopTrack !== this.settings.loopTrack;
 		this.settings = settings;
+		if (restart) this.playlist = null;
 	}
 
 	setEnabled(enabled: boolean): void {
@@ -246,8 +256,21 @@ export class BeatEngine {
 		for (const resolve of parked) resolve();
 	}
 
+	/**
+	 * The tracks the session's playlist walks. Loop-one walks just the chosen
+	 * track — a one-track list repeats it under any mode — while no choice, or a
+	 * choice the library does not have, means the whole library, whose first
+	 * track loop-one then repeats.
+	 */
+	private playlistSource(): readonly Track[] {
+		const chosen = this.settings.loopTrack;
+		if (this.settings.mode !== "loop-one" || chosen === "") return this.settings.tracks;
+		const picked = this.settings.tracks.filter((track) => trackTitle(track.midi).toLowerCase() === chosen.toLowerCase());
+		return picked.length > 0 ? picked : this.settings.tracks;
+	}
+
 	private async playTracks(run: number): Promise<void> {
-		const playlist = new Playlist(this.settings.tracks, this.settings.mode);
+		const playlist = (this.playlist ??= new Playlist(this.playlistSource(), this.settings.mode));
 
 		while (this.playing && run === this.run) {
 			const track = playlist.next();
