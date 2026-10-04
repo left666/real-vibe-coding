@@ -16,7 +16,8 @@
  *
  * Between songs there is nothing to ripple against: while the queue is dry, a
  * line under the meter says what the performance is waiting on, so the panel
- * never reads as stopped.
+ * never reads as stopped. A held performance is the exception the header
+ * carries: it says `已暂停` on the row that is always there.
  */
 
 import type { ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
@@ -166,7 +167,12 @@ class StageComponent implements Component {
 			const tempo = this.theme.fg("muted", `${Math.round(view.bpm)} BPM`);
 			const time = this.theme.fg("muted", `${clock(view.elapsed)}/${clock(view.duration)}`);
 			const mode = this.theme.fg("muted", MODE_LABELS[view.mode]);
-			lines.push(truncateToWidth([title, tempo, time, mode].join(this.theme.fg("dim", " · ")), width, "", true));
+			const fields = [title, tempo, time, mode];
+			// A held performance says so on the header, the one row the panel always
+			// has: the meter is flat and the beats are gone, so the words are what
+			// tells a pause from a lull in the music.
+			if (view.paused) fields.push(this.theme.fg("warning", "⏸ 已暂停"));
+			lines.push(truncateToWidth(fields.join(this.theme.fg("dim", " · ")), width, "", true));
 		}
 
 		lines.push(truncateToWidth(this.theme.fg("accent", meter(view, width, this.travel(view))), width, "", true));
