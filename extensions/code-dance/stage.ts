@@ -28,16 +28,16 @@ import type { PlaylistMode } from "./playlist.ts";
 
 /** The header and the meter; the rest of the panel is text. */
 const CHROME_ROWS = 2;
-const IDLE_HEADER = "♪ 等待输出…";
+const IDLE_HEADER = "♪ waiting for output…";
 const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 /** Phase per beat. Below one the wave takes more than a beat to pass a column. */
 const WAVE_PER_BEAT = 0.9;
 const WAVE_PER_SECOND_WHEN_IDLE = 2;
 
 export const MODE_LABELS: Record<PlaylistMode, string> = {
-	sequential: "顺序",
-	shuffle: "随机",
-	"loop-one": "单曲循环",
+	sequential: "sequential",
+	shuffle: "shuffle",
+	"loop-one": "loop one",
 };
 
 /** `0:42` — a track is minutes long, so the hour is not worth a column. */

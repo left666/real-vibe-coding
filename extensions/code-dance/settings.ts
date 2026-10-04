@@ -16,11 +16,11 @@ import { AUDIO_BACKENDS, normalizeConfig } from "./config.ts";
 import type { PlaylistMode } from "./playlist.ts";
 import { MODE_LABELS } from "./stage.ts";
 
-const ON = "开启";
-const OFF = "关闭";
+const ON = "On";
+const OFF = "Off";
 const MODES: readonly PlaylistMode[] = ["sequential", "shuffle", "loop-one"];
 /** The value the panel shows, and the value it writes back, are the same string. */
-const HINT = "Enter 确认 · Esc 取消";
+const HINT = "Enter to confirm · Esc to cancel";
 /** Tracks the picker shows at once before it starts scrolling. */
 const PICKER_ROWS = 10;
 
@@ -59,8 +59,8 @@ function modeOf(label: string): PlaylistMode {
 function loopRow(names: readonly string[]): Row {
 	return {
 		id: "loopTrack",
-		label: "循环曲目",
-		description: "单曲循环模式下重复的那一首。",
+		label: "Loop track",
+		description: "The track repeated in loop-one mode.",
 		picker: true,
 		value: (config) => names.find((name) => name.toLowerCase() === config.loopTrack.toLowerCase()) ?? names[0]!,
 		apply: (config, value) => normalizeConfig({ ...config, loopTrack: value }),
@@ -69,11 +69,11 @@ function loopRow(names: readonly string[]): Row {
 
 function rowsFor(names: readonly string[]): Row[] {
 	return [
-		toggleRow("enabled", "启用", "关闭整个演出，代码恢复为正常渲染。"),
+		toggleRow("enabled", "Enabled", "Turn the whole performance off; the transcript renders as usual."),
 		{
 			id: "playlistMode",
-			label: "播放模式",
-			description: "一首放完之后接着放哪一首。",
+			label: "Playlist mode",
+			description: "Which track plays after the current one ends.",
 			values: MODES.map((mode) => MODE_LABELS[mode]),
 			value: (config) => MODE_LABELS[config.playlistMode],
 			apply: (config, value) => normalizeConfig({ ...config, playlistMode: modeOf(value) }),
@@ -81,25 +81,29 @@ function rowsFor(names: readonly string[]): Row[] {
 		...(names.length > 0 ? [loopRow(names)] : []),
 		{
 			id: "stageHeight",
-			label: "舞台高度（行）",
-			description: "舞台面板占用的行数，其中两行是标题和力度条。",
+			label: "Stage height (rows)",
+			description: "Rows the stage panel occupies; two of them are the header and the meter.",
 			input: "number",
 			value: (config) => String(config.stageHeight),
 			apply: (config, value) => normalizeConfig({ ...config, stageHeight: Number(value) }),
 		},
-		toggleRow("showPlaceholder", "保留占位行", "演出时在会话记录里用一行占位提示顶替正文和思考，演出结束后变回正文。"),
+		toggleRow(
+			"showPlaceholder",
+			"Placeholders",
+			"During a performance, a one-line notice stands in for prose and reasoning in the transcript; the real text returns once it ends.",
+		),
 		{
 			id: "audioBackend",
-			label: "音频后端",
-			description: "wav-soundplayer 用 PowerShell 播放 .wav；command 执行下面的命令模板。",
+			label: "Audio backend",
+			description: "wav-soundplayer plays .wav via PowerShell; command runs the command template below.",
 			values: [...AUDIO_BACKENDS],
 			value: (config) => config.audioBackend,
 			apply: (config, value) => normalizeConfig({ ...config, audioBackend: value as AudioBackendKind }),
 		},
 		{
 			id: "audioCommand",
-			label: "命令模板",
-			description: "command 后端的 argv 模板，其中 {file} 会替换成媒体路径。",
+			label: "Command template",
+			description: "Argv template for the command backend; {file} is replaced with the media path.",
 			input: "text",
 			value: (config) => config.audioCommand,
 			apply: (config, value) => normalizeConfig({ ...config, audioCommand: value }),
@@ -133,7 +137,7 @@ class EditField implements Component {
 		this.input.onSubmit = (raw) => {
 			const accepted = this.accept(raw);
 			if (accepted === undefined) {
-				this.error = `${label}：这个值不能用`;
+				this.error = `${label}: this value cannot be used`;
 				return;
 			}
 			this.done(accepted);
@@ -252,8 +256,17 @@ class Panel implements Component {
 		);
 
 		this.box = new Box(1, 1, (line: string) => theme.bg("customMessageBg", line));
-		this.box.addChild(new Text(theme.bold(theme.fg("accent", "CodeDance 设置")), 0, 0));
-		this.box.addChild(new Text(theme.fg("dim", `已找到 ${names.length} 首（.mid，同名 .wav 一并播放）`), 0, 0));
+		this.box.addChild(new Text(theme.bold(theme.fg("accent", "CodeDance Settings")), 0, 0));
+		this.box.addChild(
+			new Text(
+				theme.fg(
+					"dim",
+					`${names.length} ${names.length === 1 ? "track" : "tracks"} found (.mid; a same-named .wav plays along)`,
+				),
+				0,
+				0,
+			),
+		);
 		this.box.addChild(new Text("", 0, 0));
 		this.box.addChild(this.list);
 	}

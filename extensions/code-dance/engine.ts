@@ -280,7 +280,7 @@ export class BeatEngine {
 			if (!track) {
 				if (!this.warnedMissingTracks) {
 					this.warnedMissingTracks = true;
-					this.onError("code-dance: 曲库为空 — 把成对的 .mid/.wav 放进 <agent 目录>/code-dance/music");
+					this.onError("code-dance: the library is empty — put paired .mid/.wav files in <agent dir>/code-dance/music");
 				}
 				this.stop();
 				return;

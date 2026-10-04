@@ -111,7 +111,7 @@ test("the panel is exactly as tall as the config asks", () => {
 	const lines = component.render(40);
 
 	assert.equal(lines.length, 6);
-	assert.ok(lines[0]!.startsWith("♪ 等待输出…"));
+	assert.ok(lines[0]!.startsWith("♪ waiting for output…"));
 	assert.equal(visibleWidth(lines[0]!), 40);
 });
 
@@ -128,7 +128,7 @@ test("the header reads the track out", () => {
 	assert.ok(header.includes("♪ Night Cruising"));
 	assert.ok(header.includes("128 BPM"));
 	assert.ok(header.includes("0:42/2:05"));
-	assert.ok(header.includes("单曲循环"));
+	assert.ok(header.includes("loop one"));
 });
 
 test("the newest line is the panel's last", () => {
