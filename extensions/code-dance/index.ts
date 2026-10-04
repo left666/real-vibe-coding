@@ -26,7 +26,10 @@
  *    a stop. `ctrl+alt+p` holds the performance where it stands and lets it go
  *    on again: the hold is the engine's — player cut, beats cancelled, clock
  *    frozen — while the printing steps out of the music's way and runs at Pi's
- *    own pace until the beats come back.
+ *    own pace until the beats come back. `ctrl+alt+n` cuts the current track
+ *    and takes the next one, the queue printing on where it stands; pressed
+ *    under the hold it is remembered, because the music cannot take it up
+ *    until the hold lets go.
  *
  * The queue runs *ahead* of the music: prose and reasoning deltas are enqueued as
  * they stream, a tool call's line from `tool_execution_start` (the transformer
@@ -480,6 +483,19 @@ export default function codeDance(pi: ExtensionAPI): void {
 			} else if (engine.pause()) {
 				notify("♪ performance paused · printing goes on", "info");
 			}
+		},
+	});
+
+	pi.registerShortcut("ctrl+alt+n", {
+		description: "CodeDance: switch to the next track",
+		handler: async () => {
+			if (!engine) return;
+			// While the music plays the stage's title is the feedback; a press under
+			// the hold moves nothing yet, so the notice is the only place it can
+			// show — and it says when the press takes effect. A press with nothing
+			// playing is silent.
+			const held = engine.isPaused;
+			if (engine.skip() && held) notify("♪ next track · plays on resume", "info");
 		},
 	});
 

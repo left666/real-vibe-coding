@@ -12,7 +12,7 @@ import type { PlaylistMode } from "../extensions/code-dance/playlist.ts";
 import { endOfTrack, header, noteOff, noteOn, sequence, tempo, track } from "./smf.ts";
 
 const PPQ = 480;
-/** MIDI velocity 100 at 120 BPM spends seven tokens a beat. */
+/** MIDI velocity 100 at 120 BPM spends eight tokens a beat. */
 const VELOCITY = 100;
 
 const made: string[] = [];
@@ -40,7 +40,7 @@ function oneOnset(): Uint8Array {
 	return sequence(header(0, 1, PPQ), track(tempo(0, 500_000), noteOn(0, 60, VELOCITY), endOfTrack(PPQ)));
 }
 
-/** Sixteenth notes at full velocity: eight tokens every eighth of a second, for eight seconds. */
+/** Sixteenth notes at full velocity: three tokens on every sixteenth, for eight seconds. */
 function drumming(): Uint8Array {
 	const events: number[][] = [tempo(0, 500_000)];
 	for (let index = 0; index < 64; index++) events.push(noteOn(index === 0 ? 0 : 120, 60, 127));
@@ -257,12 +257,12 @@ test("text queued before the task ends waits for the onsets, and the task waits 
 		backend,
 	});
 
-	// Ten tokens; a strike at velocity 100 and 120 BPM prints seven of them.
+	// Ten chunks; a strike at velocity 100 and 120 BPM prints eight of them.
 	for (const chunk of chunks(10)) engine.feed(chunk, true);
 
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
-	assert.equal(engine.queue.backlog, 6);
+	assert.equal(engine.queue.printed, chunks(8).join(""));
+	assert.equal(engine.queue.backlog, 4);
 
 	// The task is over, but the print is not: nothing is handed back yet.
 	engine.onTaskSettled();
@@ -270,7 +270,7 @@ test("text queued before the task ends waits for the onsets, and the task waits 
 	assert.equal(engine.isPlaying, true);
 
 	await clock.tick(499);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 
 	// The second strike empties the queue, and an empty queue with the task over is
 	// the end of the performance: the hand-back is what proves the last tokens went out.
@@ -370,10 +370,10 @@ test("a long note pays out more text at the strike", async (t) => {
 	);
 	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Long", file)] });
 
-	for (const chunk of chunks(30)) engine.feed(chunk, true);
+	for (const chunk of chunks(70)) engine.feed(chunk, true);
 	await clock.tick(0);
-	// Seven tokens is a beat at velocity 100; two held seconds buy twenty-six.
-	assert.equal(engine.queue.printed, chunks(26).join(""));
+	// Eight tokens is a beat at velocity 100; two held seconds buy thirty-four.
+	assert.equal(engine.queue.printed, chunks(34).join(""));
 });
 
 test("the sync offset delays the first strike so the print tracks the sound", async (t) => {
@@ -400,16 +400,16 @@ test("a track with no recording still keeps time, and the playlist moves on", as
 		tracks: [midiTrack(dir, "First", twoOnsets()), midiTrack(dir, "Second", twoOnsets())],
 	});
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 
 	// The second strike, then the rest of the first track's length.
 	await clock.tick(1_000);
 	assert.deepEqual(titles, ["First", "Second"]);
 
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(10).join(""));
+	assert.equal(engine.queue.printed, chunks(20).join(""));
 });
 
 test("the mode in force is carried to the tracks as they open", async (t) => {
@@ -498,9 +498,9 @@ test("flush prints the rest at once and ends the performance", async (t) => {
 		backend,
 	});
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 
 	engine.flush();
 	assert.equal(engine.queue.total, 0);
@@ -519,12 +519,12 @@ test("a pause cuts the music, not the printing", async (t) => {
 	const backend = honestBackend();
 	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await settle();
 	await clock.tick(0);
-	// Ten tokens; the strike at zero prints seven of them and the rest waits.
-	assert.equal(engine.queue.printed, chunks(7).join(""));
-	assert.equal(engine.queue.backlog, 6);
+	// Twenty tokens; the strike at zero prints eight of them and the rest waits.
+	assert.equal(engine.queue.printed, chunks(8).join(""));
+	assert.equal(engine.queue.backlog, 34);
 
 	await clock.tick(250);
 	const running = engine.view.elapsed;
@@ -567,10 +567,10 @@ test("the resume takes the current track from its top, and the beats pace the pr
 	const backend = honestBackend();
 	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await settle();
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 
 	engine.pause();
 	// The hold printed the tail out; nothing is left waiting.
@@ -600,10 +600,10 @@ test("a pause prints a settled task's tail out, and that is the end of the perfo
 	const backend = honestBackend();
 	const { engine, handBacks, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await settle();
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 
 	// The task is over but its tail is still queued: the performance plays on.
 	engine.onTaskSettled();
@@ -630,16 +630,16 @@ test("a pause holds the playlist too: the resumed task replays the same track", 
 		tracks: [midiTrack(dir, "First", twoOnsets()), midiTrack(dir, "Second", twoOnsets())],
 	});
 
-	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	for (const chunk of chunks(20)) engine.feed(chunk, true);
 	await clock.tick(0);
-	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.printed, chunks(8).join(""));
 	assert.deepEqual(titles, ["First"]);
 
 	engine.pause();
 	// The hold printed the tail out, and no beat followed it. The wait runs long
 	// enough that the track would have ended and the playlist moved on, had the
 	// pause not stopped the loop where it stood.
-	assert.equal(engine.queue.printed, chunks(10).join(""));
+	assert.equal(engine.queue.printed, chunks(20).join(""));
 	await clock.tick(1_500);
 	assert.deepEqual(titles, ["First"]);
 
@@ -651,6 +651,77 @@ test("a pause holds the playlist too: the resumed task replays the same track", 
 	assert.deepEqual(titles, ["First"]);
 	await clock.tick(1);
 	assert.deepEqual(titles, ["First", "Second"]);
+});
+
+test("a skip cuts the current track and takes the next one", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine, titles, clock } = rig(t, {
+		tracks: [midiTrack(dir, "First", twoOnsets(), true), midiTrack(dir, "Second", twoOnsets(), true)],
+		backend,
+	});
+
+	for (const chunk of chunks(16)) engine.feed(chunk, true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.view.title, "First");
+	assert.equal(backend.played.length, 1);
+
+	// The player is cut and the next track opens at once, from its top; the
+	// queue's tail is not cut with the music.
+	assert.equal(engine.skip(), true);
+	await settle();
+	assert.equal(backend.stops.count, 1);
+	assert.equal(backend.played.length, 2);
+	assert.deepEqual(titles, ["First", "Second"]);
+	assert.equal(engine.view.title, "Second");
+	assert.equal(engine.view.elapsed, 0);
+	assert.equal(engine.queue.printed, chunks(8).join(""));
+
+	// The new track's beats pace the tail from here.
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, chunks(16).join(""));
+});
+
+test("a skip pressed under the hold opens the next track on the resume", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine, titles, clock } = rig(t, {
+		tracks: [midiTrack(dir, "First", twoOnsets(), true), midiTrack(dir, "Second", twoOnsets(), true)],
+		backend,
+	});
+
+	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.view.title, "First");
+
+	engine.pause();
+	await settle();
+	assert.equal(engine.isPaused, true);
+
+	// The press is remembered: the hold stands and the stage still names the
+	// held track, but the resume no longer opens it again.
+	assert.equal(engine.skip(), true);
+	await settle();
+	assert.equal(engine.isPaused, true);
+	assert.equal(engine.view.title, "First");
+	assert.equal(backend.played.length, 1);
+
+	engine.resume();
+	await settle();
+	assert.equal(backend.played.length, 2);
+	assert.equal(engine.view.title, "Second");
+	assert.deepEqual(titles, ["First", "Second"]);
+});
+
+test("a skip with nothing playing is a no-op", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine } = rig(t, { tracks: [midiTrack(dir, "First", oneOnset(), true)], backend });
+
+	assert.equal(engine.skip(), false);
+	assert.equal(backend.stops.count, 0);
 });
 
 test("a request waits only while the printing is far behind", async (t) => {
@@ -675,12 +746,12 @@ test("a request waits only while the printing is far behind", async (t) => {
 	await settle();
 	assert.equal(released, false);
 
-	// Two sixteenths print four tokens: still nowhere near caught up.
+	// Two sixteenths print six tokens: still nowhere near caught up.
 	await clock.tick(125);
 	assert.ok(engine.queue.backlog > 600, `backlog ${engine.queue.backlog}`);
 	assert.equal(released, false);
 
-	// Each strike pays two tokens off the backlog; once the printing has caught
+	// Each strike pays three tokens off the backlog; once the printing has caught
 	// up, the model is let go.
 	await clock.tick(5_500);
 	assert.equal(engine.queue.backlog, 0);

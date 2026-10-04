@@ -80,7 +80,7 @@ test("the extension registers the whole surface it needs", () => {
 	assert.equal(stub.transformers.length, 1);
 	assert.deepEqual(
 		stub.shortcuts.map((shortcut) => shortcut.key),
-		["ctrl+alt+d", "ctrl+alt+p"],
+		["ctrl+alt+d", "ctrl+alt+p", "ctrl+alt+n"],
 	);
 	assert.deepEqual(stub.commands, ["code-dance"]);
 });
@@ -265,7 +265,7 @@ test("a part stands in until the music has printed it, then swaps itself back", 
 			theme: PLAIN_THEME,
 		},
 	};
-	const text = "a".repeat(60);
+	const text = "a".repeat(80);
 	const assistant: TransformerContext = { messageType: "assistant", isStreaming: false, availableWidth: 80 };
 	const transformer = stub.transformers[0]!;
 
@@ -305,8 +305,9 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 		rmSync(agentDir, { recursive: true, force: true });
 	});
 
-	// A strike at zero and the next one two seconds out: the first prints seven
-	// tokens, and the rest would wait for the second — the hold prints them now.
+	// A strike at zero and the next one two seconds out: the first prints
+	// eight tokens, and the rest would wait for the second — the hold prints
+	// them now.
 	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), noteOff(480, 60), noteOn(480 * 4, 60, 100), endOfTrack(480 * 8)));
 	shadowLibrary(agentDir, beat);
 
@@ -331,9 +332,9 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 
 	await stub.events.get("session_start")!({}, ctx);
 	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
-	// Fourteen tokens; the strike at zero prints seven of them, the rest waits
-	// for the strike two seconds out.
-	for (let index = 0; index < 14; index++) {
+	// Twenty tokens; the strike at zero prints eight of them, the rest
+	// waits for the strike two seconds out.
+	for (let index = 0; index < 20; index++) {
 		await stub.events.get("message_update")!(update(`#${index}`), ctx);
 	}
 	await stub.events.get("message_end")!({ message: { role: "assistant" } }, ctx);
@@ -353,7 +354,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	};
 
 	assert.ok(await until(() => tail().includes("#6")), "the first strike should print the first tokens");
-	assert.ok(!tail().includes("#13"), "the second strike is still two seconds out");
+	assert.ok(!tail().includes("#8"), "the second strike is still two seconds out");
 
 	// The hold: the header says so, and the row under the meter says the printing
 	// is not the thing being held.
@@ -366,7 +367,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 
 	// The beats are gone, so the queue is not held: the rest went out at once.
 	// The tail then stands only because there is nothing left to print.
-	assert.ok(tail().includes("#13"));
+	assert.ok(tail().includes("#8"));
 	const held = tail();
 	await new Promise((resolve) => setTimeout(resolve, 800));
 	assert.equal(tail(), held);
@@ -380,6 +381,63 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	assert.ok(await until(() => widgets.length === 2), "the performance should end once the task has settled");
 	assert.equal(widgets[1]!.factory, undefined);
 	assert.match(lines()[0]!, /♪ waiting for output…/);
+
+	await stub.events.get("session_shutdown")!({}, ctx);
+});
+
+test("the next-track shortcut is silent while the music plays and speaks under the hold", async (t) => {
+	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	t.after(() => {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		rmSync(agentDir, { recursive: true, force: true });
+	});
+
+	// A strike at zero and a long tail: whatever track is open, the first beat
+	// prints the text and leaves the track running.
+	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), endOfTrack(480 * 100)));
+	shadowLibrary(agentDir, beat);
+
+	const stub = extension();
+	const notifications: string[] = [];
+	const ctx = {
+		mode: "tui",
+		cwd: process.cwd(),
+		isProjectTrusted: () => false,
+		ui: {
+			notify: (message: string) => void notifications.push(message),
+			setWidget: () => {},
+			setStatus: () => {},
+			theme: PLAIN_THEME,
+		},
+	};
+	const press = (key: string) => stub.shortcuts.find((shortcut) => shortcut.key === key)!.handler();
+
+	await stub.events.get("session_start")!({}, ctx);
+
+	// Nothing is playing: the press is silent.
+	await press("ctrl+alt+n");
+	assert.deepEqual(notifications, []);
+
+	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
+	await stub.events.get("message_update")!(
+		{
+			message: { role: "assistant", content: [{ type: "text", text: "hello" }] },
+			assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "hello" },
+		},
+		ctx,
+	);
+
+	// While the music plays the cut itself is the feedback, so the press stays
+	// silent; under the hold the stage has nothing to show yet, and the notice
+	// says when the press takes effect.
+	await press("ctrl+alt+n");
+	assert.deepEqual(notifications, []);
+	await press("ctrl+alt+p");
+	await press("ctrl+alt+n");
+	assert.deepEqual(notifications, ["♪ performance paused · printing goes on", "♪ next track · plays on resume"]);
 
 	await stub.events.get("session_shutdown")!({}, ctx);
 });

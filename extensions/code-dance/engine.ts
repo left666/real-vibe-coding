@@ -19,6 +19,11 @@
  * the current track from its top — the audio cannot be picked up mid-file — and
  * the music paces whatever the printing does from then on.
  *
+ * A skip is the other stop that is not an end: the current track is cut and the
+ * playlist takes the next one, while the queue prints on where it stands. Under
+ * a hold the music cannot take it up yet, so the press is remembered and the
+ * next track opens when the hold lets go — the hold keeps its word.
+ *
  * The engine also holds the model back: while far more text is queued than the
  * music can print, `waitForCapacity` keeps the next request waiting, so a long
  * task cannot stuff the queue faster than it drains.
@@ -127,10 +132,12 @@ export class BeatEngine {
 	private settled = false;
 	/** The performance is held where it stands; the track loop waits for `resume`. */
 	private paused = false;
+	/** The track playing is left behind — `skip` was pressed — and the next one is the loop's to open. */
+	private skipRequested = false;
 	private warnedMissingTracks = false;
 	/** Requests parked in `waitForCapacity`, to be let go once the printing catches up. */
 	private parked: (() => void)[] = [];
-	/** The track loop's wait through a pause, let go by `resume` — or by `stop`, which ends the run. */
+	/** The track loop's wait through a pause, let go by `resume`, by `skip` — which trades the track for the next — or by `stop`, which ends the run. */
 	private held: (() => void)[] = [];
 
 	/**
@@ -281,6 +288,27 @@ export class BeatEngine {
 		return true;
 	}
 
+	/**
+	 * Cut the current track and take the next one: the playlist moves on and the
+	 * printing goes on where it stands, on the next track's beats. A held
+	 * performance keeps its hold — the press is remembered, and the next track
+	 * opens when the hold lets go. Returns whether a track was there to cut; a
+	 * press with nothing playing is a no-op.
+	 */
+	skip(): boolean {
+		if (!this.playing) return false;
+		if (this.paused) {
+			// The loop stands at the hold and would take this track from its top on
+			// the resume; the mark is what makes it move on instead.
+			this.skipRequested = true;
+			this.releaseHeld();
+			return true;
+		}
+		this.settings.backend.stop();
+		this.endSilentWait();
+		return true;
+	}
+
 	reset(): void {
 		this.queue.reset();
 		this.stop();
@@ -293,6 +321,7 @@ export class BeatEngine {
 	stop(): void {
 		this.playing = false;
 		this.paused = false;
+		this.skipRequested = false;
 		this.run += 1;
 		// Whatever still waits on the printing — or on a resume — is not going to
 		// get it.
@@ -358,7 +387,7 @@ export class BeatEngine {
 		for (const resolve of held) resolve();
 	}
 
-	/** The track loop's stand-through-a-pause: resolved by `resume`, or by `stop`. */
+	/** The track loop's stand-through-a-pause: resolved by `resume`, by `skip`, or by `stop`. */
 	private waitResume(): Promise<void> {
 		if (!this.paused) return Promise.resolve();
 		return new Promise<void>((resolve) => this.held.push(resolve));
@@ -406,11 +435,24 @@ export class BeatEngine {
 
 	/**
 	 * One track from its first beat to its end. A pause cuts its player mid-file,
-	 * so the loop waits the pause out here and then takes the same track from the
-	 * top. Returns whether the playlist may move on; false means the run is over.
+	 * so the loop stands at the hold and the track starts over when it is let go
+	 * — or, if a skip was pressed under the hold, moves on instead. Returns
+	 * whether the playlist may move on; false means the run is over.
 	 */
 	private async performTrack(track: Track, timeline: Timeline, run: number): Promise<boolean> {
 		while (this.playing && run === this.run) {
+			// The hold is waited out before anything opens: the pause cut the player
+			// mid-file, so the track has to start here — over, after a resume, or
+			// not at all, after a skip.
+			if (this.paused) {
+				await this.waitResume();
+				if (!this.playing || run !== this.run) return false;
+				if (this.skipRequested) {
+					this.skipRequested = false;
+					return true;
+				}
+			}
+
 			this.openTrack(track, timeline);
 			this.armOnset(timeline.onsets, 0, run);
 
@@ -430,12 +472,10 @@ export class BeatEngine {
 				this.finish();
 				return false;
 			}
-			if (this.paused) {
-				await this.waitResume();
-				continue;
-			}
-			// Text is still queued, or the model is still working: next track.
-			return true;
+			// A pause cut the player: the loop takes this track again, after the
+			// hold. Anything else — text still queued, or the model still at work —
+			// means the playlist may move on.
+			if (!this.paused) return true;
 		}
 		return false;
 	}

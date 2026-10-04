@@ -23,8 +23,8 @@ const WEAK_TOKENS_PER_SECOND = 2;
 const STRONG_TOKENS_PER_SECOND = WEAK_TOKENS_PER_SECOND * 8;
 
 /** The keyboard's tilt: the same note prints this much more down low than up high, and the other way around. */
-const HEAVIEST_PITCH_FACTOR = 1.25;
-const LIGHTEST_PITCH_FACTOR = 0.75;
+const HEAVIEST_PITCH_FACTOR = 2.0;
+const LIGHTEST_PITCH_FACTOR = 0.5;
 
 /** No note buys more than a bar of printing, however long it is held. */
 const LONGEST_COVERED_BEATS = 4;
@@ -52,9 +52,9 @@ export interface BeatChunk {
  * hardest strike prints eight times what the weakest one does. What the pace
  * buys is time, and the time is the note's own length: a long note pours out
  * more than a short one, a note the file gives no length for is priced at one
- * beat, and none covers more than a bar. The pitch tilts the price — the same
- * length and strike prints heavier down low than up high. Never zero: an onset
- * always moves the print.
+ * beat, and none covers more than a bar. The pitch tilts the price — four to
+ * one across the keyboard, twice the base at the bottom of it and half at the
+ * top. Never zero: an onset always moves the print.
  */
 export function burst(onset: Onset, bpm: number): number {
 	const secondsPerBeat = 60 / Math.max(1, bpm);

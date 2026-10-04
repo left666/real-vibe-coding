@@ -10,21 +10,23 @@ function onset(velocity: number, overrides: Partial<Onset> = {}): Onset {
 }
 
 test("burst: the tempo sets the pace and the accent scales it", () => {
-	assert.equal(burst(onset(0), 60), 2);
-	assert.equal(burst(onset(1), 60), 16);
-	assert.equal(burst(onset(0.5), 60), 9);
-	assert.equal(burst(onset(1), 120), 8);
+	assert.equal(burst(onset(0), 60), 3);
+	assert.equal(burst(onset(1), 60), 20);
+	assert.equal(burst(onset(0.5), 60), 11);
+	assert.equal(burst(onset(1), 120), 10);
 	assert.equal(burst(onset(0), 120), 1);
+	// The accent's spread: the strongest strike prints eight times the weakest.
+	assert.equal(burst(onset(1, { pitch: 0 }), 60), 8 * burst(onset(0, { pitch: 0 }), 60));
 });
 
 test("burst: a note's own length is the time it buys", () => {
 	// At 120 BPM a quarter note is half a second — the beat a lengthless note is priced at.
-	assert.equal(burst(onset(1, { duration: 0.5 }), 120), 8);
+	assert.equal(burst(onset(1, { duration: 0.5 }), 120), 10);
 	// A sixteenth buys a quarter of that, a whole note four times as much...
-	assert.equal(burst(onset(1, { duration: 0.125 }), 120), 2);
-	assert.equal(burst(onset(1, { duration: 2 }), 120), 32);
+	assert.equal(burst(onset(1, { duration: 0.125 }), 120), 3);
+	assert.equal(burst(onset(1, { duration: 2 }), 120), 40);
 	// ...and a note held longer than a bar is still priced at the bar.
-	assert.equal(burst(onset(1, { duration: 30 }), 120), 32);
+	assert.equal(burst(onset(1, { duration: 30 }), 120), 40);
 });
 
 test("burst: low notes print heavier than high ones", () => {
@@ -32,10 +34,12 @@ test("burst: low notes print heavier than high ones", () => {
 	const middle = burst(onset(1), 120);
 	const high = burst(onset(1, { pitch: 1 }), 120);
 
-	assert.equal(low, 10);
-	assert.equal(middle, 8);
-	assert.equal(high, 6);
+	assert.equal(low, 16);
+	assert.equal(middle, 10);
+	assert.equal(high, 4);
 	assert.ok(low > middle && middle > high);
+	// The keyboard's spread: four to one, bottom to top.
+	assert.equal(low, high * 4);
 });
 
 test("burst: one onset always moves the print, whatever the numbers", () => {
