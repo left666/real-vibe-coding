@@ -510,7 +510,7 @@ test("an engine with no tracks says so once", async (t) => {
 	engine.feed("ab", true);
 	await settle();
 	assert.equal(errors.length, 1);
-	assert.match(errors[0]!, /曲库为空/);
+	assert.match(errors[0]!, /library is empty/);
 	assert.equal(engine.isPlaying, false);
 
 	engine.feed("cd", true);

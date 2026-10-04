@@ -191,7 +191,7 @@ test("the stage is mounted with the task's first output and taken down when it e
 	// The footer marker stands in for the stage on the empty screen.
 	assert.equal(statuses.length, 1);
 	assert.equal(statuses[0]!.key, "code-dance");
-	assert.equal(statuses[0]!.text, "♪ 演出模式");
+	assert.equal(statuses[0]!.text, "♪ performance mode");
 
 	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
 	await stub.events.get("message_update")!(update("hello"), ctx);
@@ -365,7 +365,7 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 	assert.doesNotMatch(rendered(), /⏳/);
 
 	// Once the result has printed too, the wait is the model's.
-	assert.ok(await until(() => rendered().includes("等待模型输出")));
+	assert.ok(await until(() => rendered().includes("waiting for the model")));
 	assert.equal(component.render(60).length, 12);
 
 	await stub.events.get("agent_settled")!({}, ctx);
@@ -447,31 +447,31 @@ test("a tool block stands in until the stage has printed it, then renders itself
 		},
 		ctx,
 	);
-	assert.match(callBlock(), /▶ 打印中 · read a\.ts/);
+	assert.match(callBlock(), /▶ printing · read a\.ts/);
 
 	// The line is queued at the tool's start; the block says so until it prints.
 	await stub.events.get("tool_execution_start")!(
 		{ toolCallId: "call-1", toolName: "read", args: { file_path: "a.ts" } },
 		ctx,
 	);
-	assert.match(callBlock(), /▶ 演出中 · read a\.ts/);
+	assert.match(callBlock(), /▶ performing · read a\.ts/);
 
 	// The result lands and waits in the queue under its own notice.
 	await stub.events.get("tool_result")!(
 		{ toolCallId: "call-1", content: [{ type: "text", text: "hello world" }], isError: false },
 		ctx,
 	);
-	assert.match(resultBlock(false), /▶ 演出中 · 1 行 · 11 字/);
+	assert.match(resultBlock(false), /▶ performing · 1 line · 11 chars/);
 
 	// The strike prints both; each block hands itself back to its own renderer —
 	// the read renderer for the call, and emptiness for the collapsed result.
 	const deadline = Date.now() + 4000;
-	while (callBlock().includes("演出中") && Date.now() < deadline) {
+	while (callBlock().includes("performing") && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 	assert.match(callBlock(), /read.*a\.ts/);
-	assert.doesNotMatch(callBlock(), /演出中|打印中/);
-	assert.doesNotMatch(resultBlock(false), /演出中/);
+	assert.doesNotMatch(callBlock(), /performing|printing/);
+	assert.doesNotMatch(resultBlock(false), /performing/);
 
 	await stub.events.get("agent_settled")!({}, ctx);
 	await stub.events.get("session_shutdown")!({}, ctx);

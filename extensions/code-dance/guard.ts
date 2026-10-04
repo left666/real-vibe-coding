@@ -42,7 +42,7 @@ function stopsNode(segment: string): boolean {
 
 /** What the refused call would have done, and the recipe it should use instead. */
 const REASON =
-	"code-dance: 已拦截 — 这条命令按映像名通杀 node 进程，而 pi 自身就运行在 node.exe 上：它会被一起终结，会话当场中断，硬杀还会把终端留在原始模式（之后 shell 会把按键的转义序列回显成乱码）。请只结束目标进程：先按端口找到 PID（netstat -ano | findstr :<端口>），再 taskkill //F //PID <PID>，或在 PowerShell 里 Stop-Process -Id <PID>。";
+	"code-dance: blocked — this command kills processes by the image name \"node\", and pi itself runs as node.exe: it would go down with them, cutting the session off mid-task, and a hard kill also leaves the terminal in raw mode (the shell then echoes every keypress's escape codes as garbage). Kill only the target process instead: find its PID by port first (netstat -ano | findstr :<port>), then taskkill //F //PID <PID>, or Stop-Process -Id <PID> in PowerShell.";
 
 /** One command is the kill when any of its segments is, or when its pipeline pipes node into one. */
 function killsNodeByName(command: string): boolean {

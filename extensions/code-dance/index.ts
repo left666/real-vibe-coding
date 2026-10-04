@@ -6,8 +6,8 @@
  *
  * 1. A markdown transformer stands in for the prose and the reasoning Pi is
  *    about to draw, until each part has actually been performed. A part still
- *    streaming shows `打印中`; once the message is final, a part still in the
- *    queue shows `演出中`, and the moment the printing passes where the part
+ *    streaming shows `printing`; once the message is final, a part still in the
+ *    queue shows `performing`, and the moment the printing passes where the part
  *    ends the transcript is repainted and shows the real text. So the transcript
  *    fills in piece by piece as the music plays, not all at the end. The record
  *    lives in this process and is dropped the moment the task's performance ends,
@@ -214,7 +214,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 		if (idleSince === 0 || now - idleSince < IDLE_STILL_MS) return "";
 		const first = running.values().next().value;
 		if (first) return `⏳ ${first.line} · ${Math.floor((now - first.since) / 1000)}s`;
-		return "⏳ 等待模型输出…";
+		return "⏳ waiting for the model…";
 	}
 
 	function startStage(ui: ExtensionUIContext): Stage {
@@ -245,7 +245,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	function updateStatus(): void {
 		if (!lastCtx || lastCtx.mode !== "tui") return;
 		const ui = lastCtx.ui;
-		ui.setStatus(STATUS_KEY, config.enabled ? ui.theme.fg("accent", "♪ 演出模式") : undefined);
+		ui.setStatus(STATUS_KEY, config.enabled ? ui.theme.fg("accent", "♪ performance mode") : undefined);
 	}
 
 	function clearStatus(): void {
