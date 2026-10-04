@@ -37,6 +37,8 @@ test("every shipped rhythm reads as a timeline the printer can follow", () => {
 			assert.ok(previous < 0 || onset.seconds - previous >= 0.03 - 1e-9, `${name}: onsets are not folded`);
 			previous = onset.seconds;
 			assert.ok(onset.velocity > 0 && onset.velocity <= 1, `${name}: velocity ${onset.velocity}`);
+			assert.ok(onset.pitch >= 0 && onset.pitch <= 1, `${name}: pitch ${onset.pitch}`);
+			assert.ok(onset.duration >= 0, `${name}: duration ${onset.duration}`);
 		}
 	}
 });

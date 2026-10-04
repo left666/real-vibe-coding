@@ -64,6 +64,79 @@ test("a chord is one onset, accented by the hardest strike", () => {
 	close(timeline.onsets[0]!.velocity, 100 / 127);
 });
 
+test("a note carries its pitch and how long it is held", () => {
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 64, 100), noteOff(2 * PPQ, 64), endOfTrack()),
+	);
+
+	const timeline = readTimeline(file);
+	close(timeline.onsets[0]!.pitch, 64 / 127);
+	// Two quarter notes at 120 BPM: one second held.
+	close(timeline.onsets[0]!.duration, 1);
+});
+
+test("a note-on with velocity zero releases the note as well", () => {
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, 100), noteOn(PPQ, 60, 0), endOfTrack()),
+	);
+
+	const timeline = readTimeline(file);
+	assert.equal(timeline.onsets.length, 1);
+	close(timeline.onsets[0]!.duration, 0.5);
+});
+
+test("a note the file never releases is a strike of unknown length", () => {
+	const file = sequence(header(0, 1, PPQ), track(tempo(0, 500_000), noteOn(0, 60, 100), endOfTrack(PPQ)));
+
+	const timeline = readTimeline(file);
+	close(timeline.onsets[0]!.pitch, 60 / 127);
+	close(timeline.onsets[0]!.duration, 0);
+});
+
+test("a held note crosses a tempo change at the speeds it lived through", () => {
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, 100), tempo(PPQ, 250_000), noteOff(PPQ, 60), endOfTrack()),
+	);
+
+	// Half a second at 120 BPM, then a quarter at 240: three quarters of a second.
+	close(readTimeline(file).onsets[0]!.duration, 0.75);
+});
+
+test("a note struck again while it sounds closes the one before it", () => {
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, 100), noteOn(PPQ, 60, 100), noteOff(PPQ, 60), endOfTrack()),
+	);
+
+	const timeline = readTimeline(file);
+	assert.equal(timeline.onsets.length, 2);
+	close(timeline.onsets[0]!.duration, 0.5);
+	close(timeline.onsets[1]!.duration, 0.5);
+});
+
+test("a chord keeps the hardest strike's pitch and length", () => {
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(
+			tempo(0, 500_000),
+			noteOn(0, 48, 40),
+			noteOn(0, 72, 100),
+			noteOff(PPQ, 72),
+			noteOff(PPQ, 48),
+			endOfTrack(),
+		),
+	);
+
+	const timeline = readTimeline(file);
+	assert.equal(timeline.onsets.length, 1);
+	// The hardest strike is the top note, held half a second though the bass rings on.
+	close(timeline.onsets[0]!.pitch, 72 / 127);
+	close(timeline.onsets[0]!.duration, 0.5);
+});
+
 test("notes far enough apart are separate onsets", () => {
 	// One beat at 120 BPM is 0.5s, well past the chord window.
 	const file = sequence(

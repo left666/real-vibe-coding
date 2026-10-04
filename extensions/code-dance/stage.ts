@@ -9,10 +9,11 @@
  *
  * The meter is a row of columns that ripple in place. It is full width from the
  * first beat — nothing grows out of one end, nothing scrolls, nothing
- * accumulates; only the heights change. Depth comes from the music: the velocity
- * of the most recent onset sets how tall the wave is, the strike surges it, and
- * it falls back between beats. The wave travels with the tempo, so the row is
- * never still while a track plays.
+ * accumulates; only the heights change. The music shapes it: the velocity of the
+ * most recent onset sets how tall the wave is, its pitch how fine the ripple
+ * runs — a low note a broad swell, a high one a tight shimmer — and the strike
+ * surges it, a longer note surging longer. The wave travels with the tempo, so
+ * the row is never still while a track plays.
  *
  * Between songs there is nothing to ripple against: while the queue is dry, a
  * line under the meter says what the performance is waiting on, so the panel
@@ -34,6 +35,9 @@ const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 /** Phase per beat. Below one the wave takes more than a beat to pass a column. */
 const WAVE_PER_BEAT = 0.9;
 const WAVE_PER_SECOND_WHEN_IDLE = 2;
+/** Ripple radians per column, at the lowest key and at the highest. */
+const RIPPLE_SLOWEST = 0.34;
+const RIPPLE_FASTEST = 0.8;
 
 export const MODE_LABELS: Record<PlaylistMode, string> = {
 	sequential: "sequential",
@@ -53,17 +57,19 @@ function clamp01(value: number): number {
 
 /**
  * One meter row. `travel` is the wave's phase in radians, advancing with the
- * tempo; the columns are a sine of it, offset so neighbours are not in step.
+ * tempo; the columns are a sine of it, spaced by the pitch and offset so
+ * neighbours are not in step.
  */
 export function meter(view: StageView, width: number, travel: number): string {
 	if (width <= 0) return "";
 	const depth = clamp01(view.energy);
 	const surge = clamp01(view.pulse);
+	const ripple = RIPPLE_SLOWEST + clamp01(view.pitch) * (RIPPLE_FASTEST - RIPPLE_SLOWEST);
 	const top = BARS.length - 1;
 
 	let row = "";
 	for (let column = 0; column < width; column++) {
-		const phase = column * 0.55 + travel;
+		const phase = column * ripple + travel;
 		const wave = 0.5 + 0.5 * Math.sin(phase);
 		const fine = 0.5 + 0.5 * Math.sin(phase * 0.51 + 1.3);
 		// The surge rides on top of the depth, never replacing it: the wave keeps

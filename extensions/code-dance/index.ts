@@ -82,6 +82,7 @@ const IDLE_VIEW: StageView = {
 	duration: 0,
 	mode: "sequential",
 	energy: 0,
+	pitch: 0,
 	pulse: 0,
 	paused: false,
 };

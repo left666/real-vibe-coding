@@ -6,19 +6,28 @@
  * speeds, in both directions: a deep backlog means the print lags the music,
  * an empty one means it waits for the model while the music plays on.
  *
- * The consumer spends a budget of tokens per onset, and a token is also the
- * finest cut the queue may make. A chunk enqueued `whole` — one provider
- * delta, so one token — always goes out intact, because half a token is not a
- * thing that exists. Text with no tokens to cut on (the line for a tool call,
- * the text of a tool result) is priced at four characters per token and cut
- * wherever the budget runs out.
+ * The consumer spends a budget of tokens per onset — the music prices it (see
+ * `burst`) — and a token is also the finest cut the queue may make. A chunk
+ * enqueued `whole` — one provider delta, so one token — always goes out intact,
+ * because half a token is not a thing that exists. Text with no tokens to cut
+ * on (the line for a tool call, the text of a tool result) is priced at four
+ * characters per token and cut wherever the budget runs out.
  *
  * Pure: no timers, no Pi, no I/O.
  */
 
+import type { Onset } from "./midi.ts";
+
 /** How many tokens one onset reveals, at the weakest and at the strongest strike. */
 const WEAK_TOKENS_PER_SECOND = 2;
 const STRONG_TOKENS_PER_SECOND = WEAK_TOKENS_PER_SECOND * 8;
+
+/** The keyboard's tilt: the same note prints this much more down low than up high, and the other way around. */
+const HEAVIEST_PITCH_FACTOR = 1.25;
+const LIGHTEST_PITCH_FACTOR = 0.75;
+
+/** No note buys more than a bar of printing, however long it is held. */
+const LONGEST_COVERED_BEATS = 4;
 
 /** Characters of token-free text that one token of budget buys. */
 const CHARS_PER_TOKEN = 4;
@@ -39,15 +48,22 @@ export interface BeatChunk {
 /**
  * Tokens this onset may print.
  *
- * The tempo sets the budget per beat and the velocity is the accent — the
- * hardest strike prints eight times what the weakest one does. Never zero: an
- * onset always moves the print.
+ * The tempo sets the pace per second and the velocity is the accent — the
+ * hardest strike prints eight times what the weakest one does. What the pace
+ * buys is time, and the time is the note's own length: a long note pours out
+ * more than a short one, a note the file gives no length for is priced at one
+ * beat, and none covers more than a bar. The pitch tilts the price — the same
+ * length and strike prints heavier down low than up high. Never zero: an onset
+ * always moves the print.
  */
-export function burst(velocity: number, bpm: number): number {
-	const accent = Math.min(1, Math.max(0, velocity));
-	const perSecond = WEAK_TOKENS_PER_SECOND + accent * (STRONG_TOKENS_PER_SECOND - WEAK_TOKENS_PER_SECOND);
+export function burst(onset: Onset, bpm: number): number {
 	const secondsPerBeat = 60 / Math.max(1, bpm);
-	return Math.max(1, Math.round(perSecond * secondsPerBeat));
+	const covered = Math.min(onset.duration > 0 ? onset.duration : secondsPerBeat, secondsPerBeat * LONGEST_COVERED_BEATS);
+	const accent = Math.min(1, Math.max(0, onset.velocity));
+	const pitch = Math.min(1, Math.max(0, onset.pitch));
+	const tilt = HEAVIEST_PITCH_FACTOR + pitch * (LIGHTEST_PITCH_FACTOR - HEAVIEST_PITCH_FACTOR);
+	const perSecond = WEAK_TOKENS_PER_SECOND + accent * (STRONG_TOKENS_PER_SECOND - WEAK_TOKENS_PER_SECOND);
+	return Math.max(1, Math.round(perSecond * covered * tilt));
 }
 
 export class PrintQueue {

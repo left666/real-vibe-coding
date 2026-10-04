@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import codeDance from "../extensions/code-dance/index.ts";
 import { stagedNotice } from "../extensions/code-dance/parts.ts";
-import { endOfTrack, header, noteOn, sequence, track } from "./smf.ts";
+import { endOfTrack, header, noteOff, noteOn, sequence, track } from "./smf.ts";
 
 interface Stub {
 	events: Map<string, (event: unknown, ctx: unknown) => unknown>;
@@ -307,7 +307,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 
 	// A strike at zero and the next one two seconds out: the first prints seven
 	// tokens, and the rest would wait for the second — the hold prints them now.
-	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), noteOn(480 * 4, 60, 100), endOfTrack(480 * 8)));
+	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), noteOff(480, 60), noteOn(480 * 4, 60, 100), endOfTrack(480 * 8)));
 	shadowLibrary(agentDir, beat);
 
 	const stub = extension();

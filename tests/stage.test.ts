@@ -12,7 +12,18 @@ import type { StageOptions } from "../extensions/code-dance/stage.ts";
 const IDENTITY = { fg: (_color: string, text: string) => text, bold: (text: string) => text } as unknown as Theme;
 
 function view(overrides: Partial<StageView> = {}): StageView {
-	return { title: "", bpm: 0, elapsed: 0, duration: 0, mode: "sequential", energy: 0, pulse: 0, paused: false, ...overrides };
+	return {
+		title: "",
+		bpm: 0,
+		elapsed: 0,
+		duration: 0,
+		mode: "sequential",
+		energy: 0,
+		pitch: 0,
+		pulse: 0,
+		paused: false,
+		...overrides,
+	};
 }
 
 test("clock reads minutes and seconds", () => {
@@ -38,6 +49,22 @@ test("the meter's depth is the accent of the last strike", () => {
 	assert.ok(loud.includes("█"));
 	// Even the weakest strike still shows a shape.
 	assert.ok(quiet.includes("▂"));
+});
+
+test("the ripple's fineness is the pitch of the last strike", () => {
+	const crests = (row: string): number => {
+		let count = 0;
+		for (let column = 0; column < row.length; column++) {
+			if (row[column] === "█" && row[column - 1] !== "█") count += 1;
+		}
+		return count;
+	};
+
+	const low = meter(view({ energy: 1, pitch: 0 }), 60, 0);
+	const high = meter(view({ energy: 1, pitch: 1 }), 60, 0);
+	assert.notEqual(low, high);
+	// The same width holds more crests when the ripple is finer.
+	assert.ok(crests(high) > crests(low), `${crests(high)} crests against ${crests(low)}`);
 });
 
 test("a strike surges the meter on top of the depth", () => {

@@ -9,7 +9,7 @@ import type { AudioBackend, PlaybackResult } from "../extensions/code-dance/audi
 import { BeatEngine } from "../extensions/code-dance/engine.ts";
 import type { Track } from "../extensions/code-dance/library.ts";
 import type { PlaylistMode } from "../extensions/code-dance/playlist.ts";
-import { endOfTrack, header, noteOn, sequence, tempo, track } from "./smf.ts";
+import { endOfTrack, header, noteOff, noteOn, sequence, tempo, track } from "./smf.ts";
 
 const PPQ = 480;
 /** MIDI velocity 100 at 120 BPM spends seven tokens a beat. */
@@ -305,6 +305,75 @@ test("the frames drive the clock readout and the pulse, not the beats", async (t
 	assert.equal(engine.view.pulse, 1);
 	assert.ok(engine.view.elapsed >= 0.49, `elapsed ${engine.view.elapsed}`);
 	assert.ok(views.count > 10);
+});
+
+test("the view carries the pitch of the last strike", async (t) => {
+	const dir = scratch();
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 40, VELOCITY), noteOn(PPQ, 88, VELOCITY), endOfTrack(PPQ)),
+	);
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "First", file)] });
+
+	engine.feed("ab", true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.view.pitch, 40 / 127);
+
+	await clock.tick(500);
+	assert.equal(engine.view.pitch, 88 / 127);
+});
+
+test("a short note's surge is spent quickly", async (t) => {
+	const dir = scratch();
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, VELOCITY), noteOff(PPQ / 4, 60), endOfTrack(8 * PPQ)),
+	);
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Short", file)] });
+
+	engine.feed("ab", true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.view.pulse, 1);
+
+	// A sixteenth at 120 BPM is 125ms: the surge is gone well before this.
+	await clock.tick(600);
+	assert.equal(engine.view.pulse, 0);
+});
+
+test("a long note rides its surge out", async (t) => {
+	const dir = scratch();
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, VELOCITY), noteOff(4 * PPQ, 60), endOfTrack(8 * PPQ)),
+	);
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Long", file)] });
+
+	engine.feed("ab", true);
+	await settle();
+	await clock.tick(0);
+
+	// A two-second note still surges at 600ms; even the longest hold ends at 960.
+	await clock.tick(600);
+	assert.ok(engine.view.pulse > 0, `pulse ${engine.view.pulse}`);
+	await clock.tick(400);
+	assert.equal(engine.view.pulse, 0);
+});
+
+test("a long note pays out more text at the strike", async (t) => {
+	const dir = scratch();
+	// A whole note at 120 BPM: one strike buys the two seconds it sounds.
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(tempo(0, 500_000), noteOn(0, 60, VELOCITY), noteOff(4 * PPQ, 60), endOfTrack(8 * PPQ)),
+	);
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Long", file)] });
+
+	for (const chunk of chunks(30)) engine.feed(chunk, true);
+	await clock.tick(0);
+	// Seven tokens is a beat at velocity 100; two held seconds buy twenty-six.
+	assert.equal(engine.queue.printed, chunks(26).join(""));
 });
 
 test("the sync offset delays the first strike so the print tracks the sound", async (t) => {
@@ -606,13 +675,14 @@ test("a request waits only while the printing is far behind", async (t) => {
 	await settle();
 	assert.equal(released, false);
 
-	// Two onsets print sixteen tokens: still nowhere near caught up.
+	// Two sixteenths print four tokens: still nowhere near caught up.
 	await clock.tick(125);
 	assert.ok(engine.queue.backlog > 600, `backlog ${engine.queue.backlog}`);
 	assert.equal(released, false);
 
-	// Once the printing has caught up, the model is let go.
-	await clock.tick(1_400);
+	// Each strike pays two tokens off the backlog; once the printing has caught
+	// up, the model is let go.
+	await clock.tick(5_500);
 	assert.equal(engine.queue.backlog, 0);
 	await parked;
 	assert.equal(released, true);

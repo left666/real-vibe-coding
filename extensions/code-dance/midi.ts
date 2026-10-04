@@ -1,10 +1,12 @@
 /**
  * Minimal Standard MIDI File reader.
  *
- * CodeDance wants exactly two things from a `.mid`: when a note starts, and how
- * hard it was struck. The first is the print rhythm, the second is the accent
- * that scales the budget of a single onset. Everything else the file carries —
- * controllers, pitch bend, program changes, lyrics — is stepped over.
+ * CodeDance wants exactly four things from a `.mid`: when a note starts, how
+ * hard it was struck, how high it sits and how long it is held. The first is the
+ * print rhythm; the second is the accent that scales the budget of a single
+ * onset; the last two are the stage's — the pitch sets how fine the ripple runs,
+ * the length how long the strike's surge holds. Everything else the file
+ * carries — controllers, pitch bend, program changes, lyrics — is stepped over.
  *
  * The tempo map is followed, not averaged: a track that accelerates mid-way is
  * printed at the speed it actually plays. `format 1` files (one track per
@@ -23,6 +25,10 @@ export interface Onset {
 	seconds: number;
 	/** MIDI velocity, 0..1. */
 	velocity: number;
+	/** MIDI note number, 0..1: the lowest key is 0, the highest 1. */
+	pitch: number;
+	/** Seconds from the strike to its release, tempo changes and all; 0 when the file has no length to give. */
+	duration: number;
 }
 
 export interface Timeline {
@@ -42,6 +48,10 @@ interface TempoPoint {
 interface Attack {
 	tick: number;
 	velocity: number;
+	/** MIDI note number, 0..127. */
+	note: number;
+	/** Ticks from the strike to its release; 0 when the file has none to give. */
+	heldTicks: number;
 }
 
 interface RawFile {
@@ -126,6 +136,8 @@ function readTrack(reader: Reader, length: number, out: RawFile): void {
 	reader.enterChunk(length);
 	let tick = 0;
 	let runningStatus = 0;
+	/** The strikes still sounding, by channel and note: each waits here for the release that clocks it. */
+	const sounding = new Map<number, Attack>();
 
 	while (reader.offset < end) {
 		tick += reader.vlq();
@@ -159,8 +171,22 @@ function readTrack(reader: Reader, length: number, out: RawFile): void {
 			const data1 = reader.u8();
 			// Program change and channel pressure carry one data byte; the rest carry two.
 			const data2 = high === 0xc0 || high === 0xd0 ? 0 : reader.u8();
-			// A note-on with velocity 0 is the conventional note-off, not an attack.
-			if (high === 0x90 && data2 > 0) out.attacks.push({ tick, velocity: data2 });
+			const key = ((status & 0x0f) << 7) | data1;
+			if (high === 0x90 && data2 > 0) {
+				// A note struck again while it sounds closes the one before it here.
+				const previous = sounding.get(key);
+				if (previous) previous.heldTicks = tick - previous.tick;
+				const attack: Attack = { tick, velocity: data2, note: data1, heldTicks: 0 };
+				sounding.set(key, attack);
+				out.attacks.push(attack);
+			} else if (high === 0x80 || high === 0x90) {
+				// A note-off, or the conventional stand-in: a note-on with velocity 0.
+				const attack = sounding.get(key);
+				if (attack) {
+					attack.heldTicks = tick - attack.tick;
+					sounding.delete(key);
+				}
+			}
 		}
 
 		if (tick > out.endTick) out.endTick = tick;
@@ -239,13 +265,17 @@ function tempoMap(ppq: number, tempos: readonly TempoPoint[]): TempoMap {
 	};
 }
 
-/** Fold the notes of a chord into one onset, keeping the hardest strike as its accent. */
+/** Fold the notes of a chord into one onset: the hardest strike is the one it describes — accent, pitch and length. */
 function mergeChords(attacks: readonly Onset[]): Onset[] {
 	const merged: Onset[] = [];
 	for (const attack of attacks) {
 		const last = merged[merged.length - 1];
 		if (last && attack.seconds - last.seconds < CHORD_WINDOW_SECONDS) {
-			if (attack.velocity > last.velocity) last.velocity = attack.velocity;
+			if (attack.velocity > last.velocity) {
+				last.velocity = attack.velocity;
+				last.pitch = attack.pitch;
+				last.duration = attack.duration;
+			}
 			continue;
 		}
 		merged.push({ ...attack });
@@ -259,7 +289,18 @@ export function readTimeline(bytes: Uint8Array): Timeline {
 	const map = tempoMap(file.ppq, file.tempos);
 
 	const attacks = file.attacks
-		.map((attack) => ({ seconds: map.secondsAt(attack.tick), velocity: attack.velocity / 127 }))
+		.map((attack) => {
+			const seconds = map.secondsAt(attack.tick);
+			return {
+				seconds,
+				velocity: attack.velocity / 127,
+				pitch: attack.note / 127,
+				// The release rides the tempo map too: a note held across a change is
+				// half the old beat, half the new. A release the file never writes
+				// leaves the length 0 — there is none to be had.
+				duration: attack.heldTicks > 0 ? map.secondsAt(attack.tick + attack.heldTicks) - seconds : 0,
+			};
+		})
 		.sort((a, b) => a.seconds - b.seconds);
 
 	return {

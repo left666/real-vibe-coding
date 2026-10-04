@@ -48,6 +48,8 @@ export interface StageView {
 	mode: PlaylistMode;
 	/** Velocity of the latest onset, 0..1. 0 before the first one and once the music stops. */
 	energy: number;
+	/** Pitch of the latest onset, 0..1: the lowest key is 0, the highest 1. 0 before the first one and once the music stops. */
+	pitch: number;
 	/** 1 on an onset, decaying towards 0 before the next one. */
 	pulse: number;
 	/** The performance is held: the clock stands still and the music is cut. */
@@ -55,13 +57,22 @@ export interface StageView {
 }
 
 function idleView(): StageView {
-	return { title: "", bpm: 0, elapsed: 0, duration: 0, mode: "sequential", energy: 0, pulse: 0, paused: false };
+	return { title: "", bpm: 0, elapsed: 0, duration: 0, mode: "sequential", energy: 0, pitch: 0, pulse: 0, paused: false };
 }
 
 /** Thirty frames a second: enough for a ripple, cheap enough to leave the beat alone. */
 const FRAME_MS = 33;
-/** A strike's surge is gone this long after it lands. */
-const PULSE_DECAY_MS = 240;
+/** How long a strike's surge lasts when the file has no note length to give. */
+const UNKNOWN_SURGE_MS = 240;
+/** The surge a note's own length buys, from the shortest flash to the longest hold. */
+const SHORTEST_SURGE_MS = 120;
+const LONGEST_SURGE_MS = 960;
+
+/** The surge a note of this length in seconds buys; an unknown length gets the default. */
+function surgeFor(duration: number): number {
+	if (duration <= 0) return UNKNOWN_SURGE_MS;
+	return Math.min(LONGEST_SURGE_MS, Math.max(SHORTEST_SURGE_MS, duration * 1000));
+}
 
 /**
  * Backlog tolerated before the next request to the model is held back — around
@@ -134,6 +145,8 @@ export class BeatEngine {
 	/** When the current track's clock reads zero. */
 	private openedAt = 0;
 	private struckAt = 0;
+	/** How long the current strike's surge rides — set by the note's length. */
+	private surgeMs = UNKNOWN_SURGE_MS;
 	private onsetTimer: NodeJS.Timeout | null = null;
 	private frameTimer: NodeJS.Timeout | null = null;
 	private silentWait: SilentWait | null = null;
@@ -247,6 +260,7 @@ export class BeatEngine {
 		this.endSilentWait();
 		this.settings.backend.stop();
 		this.view.energy = 0;
+		this.view.pitch = 0;
 		this.view.pulse = 0;
 		this.printWhilePaused();
 		return this.playing;
@@ -293,6 +307,7 @@ export class BeatEngine {
 		this.settings.backend.stop();
 		// The ripple is driven by the beat: with the music gone it has nothing left to move it.
 		this.view.energy = 0;
+		this.view.pitch = 0;
 		this.view.pulse = 0;
 		this.view.paused = false;
 		this.onView();
@@ -432,6 +447,7 @@ export class BeatEngine {
 		this.view.mode = this.settings.mode;
 		this.view.elapsed = 0;
 		this.view.energy = 0;
+		this.view.pitch = 0;
 		this.view.pulse = 0;
 		this.struckAt = 0;
 		this.openedAt = this.now() + this.settings.musicSyncOffsetMs;
@@ -452,14 +468,16 @@ export class BeatEngine {
 		this.onsetTimer = setTimeout(() => {
 			this.onsetTimer = null;
 			if (!this.playing || run !== this.run) return;
-			this.strike(onset.velocity);
+			this.strike(onset);
 			this.armOnset(onsets, index + 1, run);
 		}, wait);
 	}
 
-	private strike(velocity: number): void {
-		this.queue.reveal(burst(velocity, this.view.bpm));
-		this.view.energy = velocity;
+	private strike(onset: Onset): void {
+		this.queue.reveal(burst(onset, this.view.bpm));
+		this.view.energy = onset.velocity;
+		this.view.pitch = onset.pitch;
+		this.surgeMs = surgeFor(onset.duration);
 		this.struckAt = this.now();
 		this.view.pulse = 1;
 		this.wake();
@@ -478,7 +496,7 @@ export class BeatEngine {
 			return;
 		}
 		const now = this.now();
-		this.view.pulse = Math.max(0, 1 - (now - this.struckAt) / PULSE_DECAY_MS);
+		this.view.pulse = Math.max(0, 1 - (now - this.struckAt) / this.surgeMs);
 		this.view.elapsed = Math.min(this.view.duration, Math.max(0, (now - this.openedAt) / 1000));
 		this.onView();
 	}
