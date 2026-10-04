@@ -359,10 +359,10 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	// is not the thing being held.
 	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+alt+p")!;
 	await pause.handler();
-	assert.match(lines()[0]!, /⏸ 已暂停/);
-	assert.match(lines()[2]!, /打印照常/);
-	assert.match(lines()[2]!, /ctrl\+alt\+p 继续/);
-	assert.deepEqual(notifications, ["♪ 演出已暂停 · 打印照常"]);
+	assert.match(lines()[0]!, /⏸ paused/);
+	assert.match(lines()[2]!, /printing goes on/);
+	assert.match(lines()[2]!, /ctrl\+alt\+p to resume/);
+	assert.deepEqual(notifications, ["♪ performance paused · printing goes on"]);
 
 	// The beats are gone, so the queue is not held: the rest went out at once.
 	// The tail then stands only because there is nothing left to print.
@@ -370,12 +370,12 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	const held = tail();
 	await new Promise((resolve) => setTimeout(resolve, 800));
 	assert.equal(tail(), held);
-	assert.match(lines()[0]!, /⏸ 已暂停/);
+	assert.match(lines()[0]!, /⏸ paused/);
 
 	// Let it go: the music takes over again, and the settled task's empty queue
 	// is what ends the performance — the stage comes down and the text is back.
 	await pause.handler();
-	assert.deepEqual(notifications, ["♪ 演出已暂停 · 打印照常", "♪ 演出继续"]);
+	assert.deepEqual(notifications, ["♪ performance paused · printing goes on", "♪ performance resumed"]);
 	await stub.events.get("agent_settled")!({}, ctx);
 	assert.ok(await until(() => widgets.length === 2), "the performance should end once the task has settled");
 	assert.equal(widgets[1]!.factory, undefined);

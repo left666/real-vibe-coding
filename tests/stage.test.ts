@@ -136,7 +136,7 @@ test("a held performance says so on the header", () => {
 	const { component } = harness({ view: () => playing, text: () => "", height: () => 4 });
 
 	const header = component.render(80)[0]!;
-	assert.ok(header.includes("⏸ 已暂停"));
+	assert.ok(header.includes("⏸ paused"));
 	// The track is still named: a pause is not an end.
 	assert.ok(header.includes("♪ Tune"));
 });

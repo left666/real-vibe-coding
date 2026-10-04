@@ -215,7 +215,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	 */
 	function activity(): string {
 		if (!engine || !performing) return "";
-		if (engine.isPaused) return "⏸ 已暂停 · 打印照常 · ctrl+alt+p 继续";
+		if (engine.isPaused) return "⏸ paused · printing goes on · ctrl+alt+p to resume";
 		if (!engine.queue.isEmpty) return "";
 		const now = Date.now();
 		if (idleSince === 0 || now - idleSince < IDLE_STILL_MS) return "";
@@ -475,9 +475,9 @@ export default function codeDance(pi: ExtensionAPI): void {
 			// performance ending, not holding.
 			if (engine.isPaused) {
 				engine.resume();
-				notify("♪ 演出继续", "info");
+				notify("♪ performance resumed", "info");
 			} else if (engine.pause()) {
-				notify("♪ 演出已暂停 · 打印照常", "info");
+				notify("♪ performance paused · printing goes on", "info");
 			}
 		},
 	});
