@@ -12,7 +12,7 @@ import type { StageOptions } from "../extensions/code-dance/stage.ts";
 const IDENTITY = { fg: (_color: string, text: string) => text, bold: (text: string) => text } as unknown as Theme;
 
 function view(overrides: Partial<StageView> = {}): StageView {
-	return { title: "", bpm: 0, elapsed: 0, duration: 0, mode: "sequential", energy: 0, pulse: 0, ...overrides };
+	return { title: "", bpm: 0, elapsed: 0, duration: 0, mode: "sequential", energy: 0, pulse: 0, paused: false, ...overrides };
 }
 
 test("clock reads minutes and seconds", () => {
@@ -111,7 +111,7 @@ test("the panel is exactly as tall as the config asks", () => {
 	const lines = component.render(40);
 
 	assert.equal(lines.length, 6);
-	assert.ok(lines[0]!.startsWith("♪ waiting for output…"));
+	assert.ok(lines[0]!.startsWith("♪ 等待输出…"));
 	assert.equal(visibleWidth(lines[0]!), 40);
 });
 
@@ -128,7 +128,17 @@ test("the header reads the track out", () => {
 	assert.ok(header.includes("♪ Night Cruising"));
 	assert.ok(header.includes("128 BPM"));
 	assert.ok(header.includes("0:42/2:05"));
-	assert.ok(header.includes("loop one"));
+	assert.ok(header.includes("单曲循环"));
+});
+
+test("a held performance says so on the header", () => {
+	const playing = view({ title: "Tune", paused: true });
+	const { component } = harness({ view: () => playing, text: () => "", height: () => 4 });
+
+	const header = component.render(80)[0]!;
+	assert.ok(header.includes("⏸ 已暂停"));
+	// The track is still named: a pause is not an end.
+	assert.ok(header.includes("♪ Tune"));
 });
 
 test("the newest line is the panel's last", () => {

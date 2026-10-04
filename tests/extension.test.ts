@@ -31,6 +31,20 @@ interface ToolDefinition {
 /** A theme that leaves the text alone; the renderers under test only style it. */
 const PLAIN_THEME = { fg: (_color: string, text: string) => text, bold: (text: string) => text };
 
+/** Every track the package ships; each is one the playlist may reach for. */
+const PACKAGED = ["Angry Birds.mid", "Elysium.mid", "Graze The Roof.mid", "He's a Pirate.mid", "Night Cruising.mid"];
+
+/**
+ * Shadow every packaged track with one of the test's own — no `.wav` beside it,
+ * so the clock is the MIDI's and nothing reaches the speakers. Whichever name
+ * the playlist picks leads the same life.
+ */
+function shadowLibrary(agentDir: string, beat: Uint8Array): void {
+	const music = join(agentDir, "code-dance", "music");
+	mkdirSync(music, { recursive: true });
+	for (const name of PACKAGED) writeFileSync(join(music, name), beat);
+}
+
 function extension(): Stub {
 	const stub: Stub = { events: new Map(), transformers: [], shortcuts: [], commands: [], tools: [] };
 	codeDance({
@@ -66,7 +80,7 @@ test("the extension registers the whole surface it needs", () => {
 	assert.equal(stub.transformers.length, 1);
 	assert.deepEqual(
 		stub.shortcuts.map((shortcut) => shortcut.key),
-		["ctrl+shift+d"],
+		["ctrl+shift+d", "ctrl+shift+p"],
 	);
 	assert.deepEqual(stub.commands, ["code-dance"]);
 });
@@ -157,12 +171,8 @@ test("the stage is mounted with the task's first output and taken down when it e
 
 	// Shadow every packaged track with a silent one of the same name: the
 	// performance then stays off the speakers whatever track the playlist picks.
-	const music = join(agentDir, "code-dance", "music");
-	mkdirSync(music, { recursive: true });
 	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), endOfTrack(480)));
-	for (const name of ["He's a Pirate.mid", "Night Cruising.mid", "PVZ.mid"]) {
-		writeFileSync(join(music, name), beat);
-	}
+	shadowLibrary(agentDir, beat);
 
 	const stub = extension();
 	const widgets: { key: string; factory: unknown }[] = [];
@@ -191,7 +201,7 @@ test("the stage is mounted with the task's first output and taken down when it e
 	// The footer marker stands in for the stage on the empty screen.
 	assert.equal(statuses.length, 1);
 	assert.equal(statuses[0]!.key, "code-dance");
-	assert.equal(statuses[0]!.text, "♪ performance mode");
+	assert.equal(statuses[0]!.text, "♪ 演出模式");
 
 	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
 	await stub.events.get("message_update")!(update("hello"), ctx);
@@ -237,15 +247,11 @@ test("a part stands in until the music has printed it, then swaps itself back", 
 
 	// Three strikes half a second apart: enough to print a part in pieces, so the
 	// swap can be watched happening between them.
-	const music = join(agentDir, "code-dance", "music");
-	mkdirSync(music, { recursive: true });
 	const beat = sequence(
 		header(0, 1, 480),
 		track(noteOn(0, 60, 100), noteOn(480, 60, 100), noteOn(480, 60, 100), endOfTrack(480 * 100)),
 	);
-	for (const name of ["He's a Pirate.mid", "Night Cruising.mid", "PVZ.mid"]) {
-		writeFileSync(join(music, name), beat);
-	}
+	shadowLibrary(agentDir, beat);
 
 	const stub = extension();
 	const ctx = {
@@ -289,6 +295,95 @@ test("a part stands in until the music has printed it, then swaps itself back", 
 	await stub.events.get("session_shutdown")!({}, ctx);
 });
 
+test("the pause shortcut holds the music while the printing runs on at pi's pace", async (t) => {
+	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	t.after(() => {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		rmSync(agentDir, { recursive: true, force: true });
+	});
+
+	// A strike at zero and the next one two seconds out: the first prints seven
+	// tokens, and the rest would wait for the second — the hold prints them now.
+	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), noteOn(480 * 4, 60, 100), endOfTrack(480 * 8)));
+	shadowLibrary(agentDir, beat);
+
+	const stub = extension();
+	const widgets: { key: string; factory: unknown }[] = [];
+	const notifications: string[] = [];
+	const ctx = {
+		mode: "tui",
+		cwd: process.cwd(),
+		isProjectTrusted: () => false,
+		ui: {
+			notify: (message: string) => void notifications.push(message),
+			setWidget: (key: string, factory: unknown) => void widgets.push({ key, factory }),
+			setStatus: () => {},
+			theme: PLAIN_THEME,
+		},
+	};
+	const update = (delta: string) => ({
+		message: { role: "assistant", content: [{ type: "text", text: delta }] },
+		assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta },
+	});
+
+	await stub.events.get("session_start")!({}, ctx);
+	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
+	// Fourteen tokens; the strike at zero prints seven of them, the rest waits
+	// for the strike two seconds out.
+	for (let index = 0; index < 14; index++) {
+		await stub.events.get("message_update")!(update(`#${index}`), ctx);
+	}
+	await stub.events.get("message_end")!({ message: { role: "assistant" } }, ctx);
+
+	const component = (widgets[0]!.factory as (tui: unknown, theme: unknown) => { render(width: number): string[] })(
+		{ requestRender: () => {}, invalidate: () => {} },
+		PLAIN_THEME,
+	);
+	const lines = () => component.render(60);
+	// The text rows: header, meter, and — while held — the activity row, then the
+	// bottom-anchored tail.
+	const tail = () => lines().slice(3).join("\n");
+	const until = async (done: () => boolean): Promise<boolean> => {
+		const deadline = Date.now() + 4000;
+		while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 15));
+		return done();
+	};
+
+	assert.ok(await until(() => tail().includes("#6")), "the first strike should print the first tokens");
+	assert.ok(!tail().includes("#13"), "the second strike is still two seconds out");
+
+	// The hold: the header says so, and the row under the meter says the printing
+	// is not the thing being held.
+	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+shift+p")!;
+	await pause.handler();
+	assert.match(lines()[0]!, /⏸ 已暂停/);
+	assert.match(lines()[2]!, /打印照常/);
+	assert.match(lines()[2]!, /ctrl\+shift\+p 继续/);
+	assert.deepEqual(notifications, ["♪ 演出已暂停 · 打印照常"]);
+
+	// The beats are gone, so the queue is not held: the rest went out at once.
+	// The tail then stands only because there is nothing left to print.
+	assert.ok(tail().includes("#13"));
+	const held = tail();
+	await new Promise((resolve) => setTimeout(resolve, 800));
+	assert.equal(tail(), held);
+	assert.match(lines()[0]!, /⏸ 已暂停/);
+
+	// Let it go: the music takes over again, and the settled task's empty queue
+	// is what ends the performance — the stage comes down and the text is back.
+	await pause.handler();
+	assert.deepEqual(notifications, ["♪ 演出已暂停 · 打印照常", "♪ 演出继续"]);
+	await stub.events.get("agent_settled")!({}, ctx);
+	assert.ok(await until(() => widgets.length === 2), "the performance should end once the task has settled");
+	assert.equal(widgets[1]!.factory, undefined);
+	assert.match(lines()[0]!, /♪ 等待输出…/);
+
+	await stub.events.get("session_shutdown")!({}, ctx);
+});
+
 test("the dry wait is named: the running tool first, the model after", async (t) => {
 	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
@@ -301,15 +396,11 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 
 	// Strikes at half a second, a second, and two and a half: the call line prints
 	// on the first, the result on the third, and the wait between them is dry.
-	const music = join(agentDir, "code-dance", "music");
-	mkdirSync(music, { recursive: true });
 	const beat = sequence(
 		header(0, 1, 480),
 		track(noteOn(0, 60, 100), noteOn(480, 60, 100), noteOn(480 * 4, 60, 100), endOfTrack(480 * 100)),
 	);
-	for (const name of ["He's a Pirate.mid", "Night Cruising.mid", "PVZ.mid"]) {
-		writeFileSync(join(music, name), beat);
-	}
+	shadowLibrary(agentDir, beat);
 
 	const stub = extension();
 	const widgets: { key: string; factory: unknown }[] = [];
@@ -365,7 +456,7 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 	assert.doesNotMatch(rendered(), /⏳/);
 
 	// Once the result has printed too, the wait is the model's.
-	assert.ok(await until(() => rendered().includes("waiting for the model")));
+	assert.ok(await until(() => rendered().includes("等待模型输出")));
 	assert.equal(component.render(60).length, 12);
 
 	await stub.events.get("agent_settled")!({}, ctx);
@@ -384,12 +475,8 @@ test("a tool block stands in until the stage has printed it, then renders itself
 
 	// A strike a third of a second out, strong enough to print a short call line
 	// and its short result in one go.
-	const music = join(agentDir, "code-dance", "music");
-	mkdirSync(music, { recursive: true });
 	const beat = sequence(header(0, 1, 480), track(noteOn(0, 60, 100), endOfTrack(480 * 100)));
-	for (const name of ["He's a Pirate.mid", "Night Cruising.mid", "PVZ.mid"]) {
-		writeFileSync(join(music, name), beat);
-	}
+	shadowLibrary(agentDir, beat);
 
 	const stub = extension();
 	const ctx = {
@@ -447,31 +534,31 @@ test("a tool block stands in until the stage has printed it, then renders itself
 		},
 		ctx,
 	);
-	assert.match(callBlock(), /▶ printing · read a\.ts/);
+	assert.match(callBlock(), /▶ 打印中 · read a\.ts/);
 
 	// The line is queued at the tool's start; the block says so until it prints.
 	await stub.events.get("tool_execution_start")!(
 		{ toolCallId: "call-1", toolName: "read", args: { file_path: "a.ts" } },
 		ctx,
 	);
-	assert.match(callBlock(), /▶ performing · read a\.ts/);
+	assert.match(callBlock(), /▶ 演出中 · read a\.ts/);
 
 	// The result lands and waits in the queue under its own notice.
 	await stub.events.get("tool_result")!(
 		{ toolCallId: "call-1", content: [{ type: "text", text: "hello world" }], isError: false },
 		ctx,
 	);
-	assert.match(resultBlock(false), /▶ performing · 1 line · 11 chars/);
+	assert.match(resultBlock(false), /▶ 演出中 · 1 行 · 11 字/);
 
 	// The strike prints both; each block hands itself back to its own renderer —
 	// the read renderer for the call, and emptiness for the collapsed result.
 	const deadline = Date.now() + 4000;
-	while (callBlock().includes("performing") && Date.now() < deadline) {
+	while (callBlock().includes("演出中") && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 	assert.match(callBlock(), /read.*a\.ts/);
-	assert.doesNotMatch(callBlock(), /performing|printing/);
-	assert.doesNotMatch(resultBlock(false), /performing/);
+	assert.doesNotMatch(callBlock(), /演出中|打印中/);
+	assert.doesNotMatch(resultBlock(false), /演出中/);
 
 	await stub.events.get("agent_settled")!({}, ctx);
 	await stub.events.get("session_shutdown")!({}, ctx);

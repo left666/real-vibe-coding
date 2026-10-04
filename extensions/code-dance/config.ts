@@ -116,7 +116,7 @@ export function loadConfig(
 	try {
 		return normalizeConfig(JSON.parse(readFileSync(path, "utf8")));
 	} catch (error) {
-		warn?.(`code-dance: config could not be parsed (${error instanceof Error ? error.message : String(error)}); using defaults`, "warning");
+		warn?.(`code-dance: 配置无法解析（${error instanceof Error ? error.message : String(error)}），已用默认值`, "warning");
 		return { ...DEFAULT_CONFIG };
 	}
 }

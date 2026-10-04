@@ -6,8 +6,8 @@
  *
  * 1. A markdown transformer stands in for the prose and the reasoning Pi is
  *    about to draw, until each part has actually been performed. A part still
- *    streaming shows `printing`; once the message is final, a part still in the
- *    queue shows `performing`, and the moment the printing passes where the part
+ *    streaming shows `打印中`; once the message is final, a part still in the
+ *    queue shows `演出中`, and the moment the printing passes where the part
  *    ends the transcript is repainted and shows the real text. So the transcript
  *    fills in piece by piece as the music plays, not all at the end. The record
  *    lives in this process and is dropped the moment the task's performance ends,
@@ -23,7 +23,10 @@
  *    output and taken down when the performance ends, so an idle screen has no
  *    stage on it. While the queue is dry the panel names what it is waiting on —
  *    the running tool and its seconds, or the model — so a wait never reads as
- *    a stop.
+ *    a stop. `ctrl+shift+p` holds the performance where it stands and lets it go
+ *    on again: the hold is the engine's — player cut, beats cancelled, clock
+ *    frozen — while the printing steps out of the music's way and runs at Pi's
+ *    own pace until the beats come back.
  *
  * The queue runs *ahead* of the music: prose and reasoning deltas are enqueued as
  * they stream, a tool call's line from `tool_execution_start` (the transformer
@@ -80,6 +83,7 @@ const IDLE_VIEW: StageView = {
 	mode: "sequential",
 	energy: 0,
 	pulse: 0,
+	paused: false,
 };
 
 export default function codeDance(pi: ExtensionAPI): void {
@@ -206,15 +210,18 @@ export default function codeDance(pi: ExtensionAPI): void {
 	 * The line under the meter while the queue is dry: what the performance is
 	 * waiting on, named — a tool still running, with its seconds, or the model
 	 * itself. Empty hides the row, so the text keeps every row the panel has the
-	 * rest of the time.
+	 * rest of the time. A held performance keeps the row whatever the queue is
+	 * doing — the music is what waits, and the row names the way back.
 	 */
 	function activity(): string {
-		if (!engine || !performing || !engine.queue.isEmpty) return "";
+		if (!engine || !performing) return "";
+		if (engine.isPaused) return "⏸ 已暂停 · 打印照常 · ctrl+shift+p 继续";
+		if (!engine.queue.isEmpty) return "";
 		const now = Date.now();
 		if (idleSince === 0 || now - idleSince < IDLE_STILL_MS) return "";
 		const first = running.values().next().value;
 		if (first) return `⏳ ${first.line} · ${Math.floor((now - first.since) / 1000)}s`;
-		return "⏳ waiting for the model…";
+		return "⏳ 等待模型输出…";
 	}
 
 	function startStage(ui: ExtensionUIContext): Stage {
@@ -245,7 +252,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	function updateStatus(): void {
 		if (!lastCtx || lastCtx.mode !== "tui") return;
 		const ui = lastCtx.ui;
-		ui.setStatus(STATUS_KEY, config.enabled ? ui.theme.fg("accent", "♪ performance mode") : undefined);
+		ui.setStatus(STATUS_KEY, config.enabled ? ui.theme.fg("accent", "♪ 演出模式") : undefined);
 	}
 
 	function clearStatus(): void {
@@ -455,6 +462,23 @@ export default function codeDance(pi: ExtensionAPI): void {
 			// further, so the rest of it renders as it always would.
 			skipped = true;
 			engine?.flush();
+		},
+	});
+
+	pi.registerShortcut("ctrl+shift+p", {
+		description: "CodeDance: hold the performance, or let it go on",
+		handler: async () => {
+			if (!engine) return;
+			// A held performance can be let go only by the same key: the notice says
+			// which way it went. A press with nothing playing is silent — and so is
+			// the one whose printing drains a settled queue, because that is the
+			// performance ending, not holding.
+			if (engine.isPaused) {
+				engine.resume();
+				notify("♪ 演出继续", "info");
+			} else if (engine.pause()) {
+				notify("♪ 演出已暂停 · 打印照常", "info");
+			}
 		},
 	});
 

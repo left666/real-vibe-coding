@@ -66,28 +66,27 @@ export function performedParts(content: unknown): PerformedPart[] {
 }
 
 function describe(text: string): string {
-	const lines = countLines(text);
-	return `${lines} ${lines === 1 ? "line" : "lines"} · ${text.length} ${text.length === 1 ? "char" : "chars"}`;
+	return `${countLines(text)} 行 · ${text.length} 字`;
 }
 
 /** Stands in for a part the stage is performing: queued, not yet fully printed. */
 export function stagedNotice(text: string): string {
-	return `▶ performing · ${describe(text)}`;
+	return `▶ 演出中 · ${describe(text)}`;
 }
 
 /** Stands in for a part that is still streaming — it may not have reached the stage yet. */
 export function printingNotice(text: string): string {
-	return `▶ printing · ${describe(text)}`;
+	return `▶ 打印中 · ${describe(text)}`;
 }
 
 /** Stands in for a tool call's block, naming the call — a call has no length to describe. */
 export function stagedCall(line: string): string {
-	return `▶ performing · ${line}`;
+	return `▶ 演出中 · ${line}`;
 }
 
 /** Stands in for a tool call whose block is drawn before its line has reached the queue. */
 export function printingCall(line: string): string {
-	return `▶ printing · ${line}`;
+	return `▶ 打印中 · ${line}`;
 }
 
 function firstString(fields: Record<string, unknown>, keys: readonly string[]): string {

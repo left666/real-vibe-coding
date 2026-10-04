@@ -74,7 +74,7 @@ test("the loop row opens a second-level list and takes the chosen track", async 
 	const { panel, changes } = await open({ ...DEFAULT_CONFIG }, ["Alpha", "Beta", "Gamma"]);
 
 	// The row shows the track in force: the first one, with nothing chosen yet.
-	assert.match(screen(panel), /Loop track\s+Alpha/);
+	assert.match(screen(panel), /循环曲目\s+Alpha/);
 
 	toLoopRow(panel);
 	press(panel, ENTER);
@@ -84,7 +84,7 @@ test("the loop row opens a second-level list and takes the chosen track", async 
 	const picker = screen(panel);
 	assert.match(picker, /→ Alpha/);
 	assert.match(picker, /Beta/);
-	assert.doesNotMatch(picker, /Stage height/);
+	assert.doesNotMatch(picker, /舞台高度/);
 
 	press(panel, DOWN);
 	assert.match(screen(panel), /→ Beta/);
@@ -94,7 +94,7 @@ test("the loop row opens a second-level list and takes the chosen track", async 
 	assert.equal(changes[0]!.loopTrack, "Beta");
 
 	// Back on the first level, the row now shows the track that was chosen.
-	assert.match(screen(panel), /Loop track\s+Beta/);
+	assert.match(screen(panel), /循环曲目\s+Beta/);
 });
 
 test("the picker starts on the track in force and Esc keeps it", async () => {
@@ -106,10 +106,10 @@ test("the picker starts on the track in force and Esc keeps it", async () => {
 
 	press(panel, ESC);
 	assert.equal(changes.length, 0);
-	assert.match(screen(panel), /Loop track\s+Gamma/);
+	assert.match(screen(panel), /循环曲目\s+Gamma/);
 });
 
 test("with no tracks there is no loop row to open", async () => {
 	const { panel } = await open({ ...DEFAULT_CONFIG }, []);
-	assert.doesNotMatch(screen(panel), /Loop track/);
+	assert.doesNotMatch(screen(panel), /循环曲目/);
 });

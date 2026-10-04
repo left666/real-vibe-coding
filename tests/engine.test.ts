@@ -95,6 +95,32 @@ function failingBackend(message: string): Backend {
 	};
 }
 
+/**
+ * A player that honours the backend contract: `play` settles when `stop` cuts it
+ * short. The pause leans on that — it is the kill that ends the current track's
+ * await, and the loop then waits for the resume.
+ */
+function honestBackend(): Backend {
+	const played: string[] = [];
+	const stops = { count: 0 };
+	let ended: ((result: PlaybackResult) => void) | null = null;
+	return {
+		played,
+		stops,
+		play(file: string): Promise<PlaybackResult> {
+			played.push(file);
+			return new Promise<PlaybackResult>((resolve) => {
+				ended = resolve;
+			});
+		},
+		stop(): void {
+			stops.count += 1;
+			ended?.("stopped");
+			ended = null;
+		},
+	};
+}
+
 /** Flushes pending microtasks, so the promise chains inside the engine have run. */
 function settle(): Promise<void> {
 	return new Promise<void>((resolve) => setImmediate(resolve));
@@ -419,6 +445,145 @@ test("flush prints the rest at once and ends the performance", async (t) => {
 	assert.equal(engine.queue.total, 0);
 });
 
+test("a pause cuts the music, not the printing", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
+
+	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	await settle();
+	await clock.tick(0);
+	// Ten tokens; the strike at zero prints seven of them and the rest waits.
+	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.equal(engine.queue.backlog, 6);
+
+	await clock.tick(250);
+	const running = engine.view.elapsed;
+
+	// A request parked on a deep backlog: only the printing can let it go.
+	deepBacklog(engine);
+	let released = false;
+	const parked = engine.waitForCapacity().then(() => {
+		released = true;
+	});
+	await settle();
+	assert.equal(released, false);
+
+	assert.equal(engine.pause(), true);
+	assert.equal(engine.isPaused, true);
+	assert.equal(engine.view.paused, true);
+	assert.equal(backend.stops.count, 1);
+
+	// The music is cut; the printing is not. With no beats to wait on the whole
+	// backlog goes out at once, and the parked request is let go with it.
+	assert.equal(engine.queue.isEmpty, true);
+	await parked;
+	assert.equal(released, true);
+
+	// Text arriving while held prints on arrival, not on a beat.
+	engine.feed("#tail", true);
+	assert.ok(engine.queue.printed.endsWith("#tail"));
+	assert.equal(engine.queue.isEmpty, true);
+
+	// The clock stands where the pause left it, and the strike it would have
+	// waited on never lands.
+	await clock.tick(600);
+	assert.equal(engine.view.elapsed, running);
+	assert.ok(engine.queue.printed.endsWith("#tail"));
+	assert.equal(engine.view.paused, true);
+});
+
+test("the resume takes the current track from its top, and the beats pace the print again", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
+
+	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, chunks(7).join(""));
+
+	engine.pause();
+	// The hold printed the tail out; nothing is left waiting.
+	assert.equal(engine.queue.isEmpty, true);
+
+	engine.resume();
+	assert.equal(engine.isPaused, false);
+	assert.equal(engine.view.paused, false);
+	await settle();
+	// The same track, opened again from its top.
+	assert.equal(backend.played.length, 2);
+	assert.equal(engine.view.elapsed, 0);
+
+	// The beats are the pacer again: a token queued after the resume waits for
+	// the next strike instead of going out on arrival.
+	engine.feed("#live", true);
+	assert.equal(engine.queue.backlog, 5);
+	assert.equal(engine.queue.printed.endsWith("#live"), false);
+
+	await clock.tick(500);
+	assert.ok(engine.queue.printed.endsWith("#live"));
+	assert.equal(engine.queue.isEmpty, true);
+});
+
+test("a pause prints a settled task's tail out, and that is the end of the performance", async (t) => {
+	const dir = scratch();
+	const backend = honestBackend();
+	const { engine, handBacks, clock } = rig(t, { tracks: [midiTrack(dir, "First", twoOnsets(), true)], backend });
+
+	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	await settle();
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, chunks(7).join(""));
+
+	// The task is over but its tail is still queued: the performance plays on.
+	engine.onTaskSettled();
+	assert.equal(engine.isPlaying, true);
+
+	// The hold prints the tail out at once, and a settled queue that empties is
+	// the end it would have been at the next strike — nothing left to hold.
+	assert.equal(engine.pause(), false);
+	assert.equal(engine.isPlaying, false);
+	assert.equal(engine.queue.total, 0);
+	assert.equal(engine.view.title, "");
+	assert.equal(handBacks.count, 1);
+
+	// The held track loop is gone with the performance, and the release has
+	// nothing left to start: no second track is ever opened.
+	assert.equal(engine.resume(), false);
+	await clock.tick(2_000);
+	assert.equal(backend.played.length, 1);
+});
+
+test("a pause holds the playlist too: the resumed task replays the same track", async (t) => {
+	const dir = scratch();
+	const { engine, titles, clock } = rig(t, {
+		tracks: [midiTrack(dir, "First", twoOnsets()), midiTrack(dir, "Second", twoOnsets())],
+	});
+
+	for (const chunk of chunks(10)) engine.feed(chunk, true);
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, chunks(7).join(""));
+	assert.deepEqual(titles, ["First"]);
+
+	engine.pause();
+	// The hold printed the tail out, and no beat followed it. The wait runs long
+	// enough that the track would have ended and the playlist moved on, had the
+	// pause not stopped the loop where it stood.
+	assert.equal(engine.queue.printed, chunks(10).join(""));
+	await clock.tick(1_500);
+	assert.deepEqual(titles, ["First"]);
+
+	// Taken from the top, the same track gets its full length again before the
+	// playlist may reach the next one.
+	engine.resume();
+	await settle();
+	await clock.tick(999);
+	assert.deepEqual(titles, ["First"]);
+	await clock.tick(1);
+	assert.deepEqual(titles, ["First", "Second"]);
+});
+
 test("a request waits only while the printing is far behind", async (t) => {
 	const dir = scratch();
 	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Drumming", drumming())] });
@@ -510,7 +675,7 @@ test("an engine with no tracks says so once", async (t) => {
 	engine.feed("ab", true);
 	await settle();
 	assert.equal(errors.length, 1);
-	assert.match(errors[0]!, /library is empty/);
+	assert.match(errors[0]!, /曲库为空/);
 	assert.equal(engine.isPlaying, false);
 
 	engine.feed("cd", true);

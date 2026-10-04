@@ -68,13 +68,13 @@ test("performedParts: junk content yields nothing", () => {
 });
 
 test("the notices describe the part they stand in for", () => {
-	assert.equal(stagedNotice("a\nb"), "▶ performing · 2 lines · 3 chars");
-	assert.equal(printingNotice("a"), "▶ printing · 1 line · 1 char");
+	assert.equal(stagedNotice("a\nb"), "▶ 演出中 · 2 行 · 3 字");
+	assert.equal(printingNotice("a"), "▶ 打印中 · 1 行 · 1 字");
 });
 
 test("the call notices name the line instead of measuring it", () => {
-	assert.equal(stagedCall("read a.ts"), "▶ performing · read a.ts");
-	assert.equal(printingCall("$ ls -la"), "▶ printing · $ ls -la");
+	assert.equal(stagedCall("read a.ts"), "▶ 演出中 · read a.ts");
+	assert.equal(printingCall("$ ls -la"), "▶ 打印中 · $ ls -la");
 });
 
 test("toolCallText: shell calls are shown as the shell", () => {

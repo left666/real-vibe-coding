@@ -122,7 +122,7 @@ test("a broken file warns and falls back", () => {
 	const config = loadConfig(agent, (message, level) => warnings.push(`${level}: ${message}`));
 	assert.deepEqual(config, DEFAULT_CONFIG);
 	assert.equal(warnings.length, 1);
-	assert.match(warnings[0]!, /^warning: code-dance: config could not be parsed/);
+	assert.match(warnings[0]!, /^warning: code-dance: 配置无法解析/);
 });
 
 test("what was saved is what is loaded", () => {
