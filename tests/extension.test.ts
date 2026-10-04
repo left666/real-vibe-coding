@@ -80,7 +80,7 @@ test("the extension registers the whole surface it needs", () => {
 	assert.equal(stub.transformers.length, 1);
 	assert.deepEqual(
 		stub.shortcuts.map((shortcut) => shortcut.key),
-		["ctrl+shift+d", "ctrl+shift+p"],
+		["ctrl+alt+d", "ctrl+alt+p"],
 	);
 	assert.deepEqual(stub.commands, ["code-dance"]);
 });
@@ -357,11 +357,11 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 
 	// The hold: the header says so, and the row under the meter says the printing
 	// is not the thing being held.
-	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+shift+p")!;
+	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+alt+p")!;
 	await pause.handler();
 	assert.match(lines()[0]!, /⏸ 已暂停/);
 	assert.match(lines()[2]!, /打印照常/);
-	assert.match(lines()[2]!, /ctrl\+shift\+p 继续/);
+	assert.match(lines()[2]!, /ctrl\+alt\+p 继续/);
 	assert.deepEqual(notifications, ["♪ 演出已暂停 · 打印照常"]);
 
 	// The beats are gone, so the queue is not held: the rest went out at once.
@@ -379,7 +379,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	await stub.events.get("agent_settled")!({}, ctx);
 	assert.ok(await until(() => widgets.length === 2), "the performance should end once the task has settled");
 	assert.equal(widgets[1]!.factory, undefined);
-	assert.match(lines()[0]!, /♪ 等待输出…/);
+	assert.match(lines()[0]!, /♪ waiting for output…/);
 
 	await stub.events.get("session_shutdown")!({}, ctx);
 });

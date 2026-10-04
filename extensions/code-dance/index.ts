@@ -23,7 +23,7 @@
  *    output and taken down when the performance ends, so an idle screen has no
  *    stage on it. While the queue is dry the panel names what it is waiting on —
  *    the running tool and its seconds, or the model — so a wait never reads as
- *    a stop. `ctrl+shift+p` holds the performance where it stands and lets it go
+ *    a stop. `ctrl+alt+p` holds the performance where it stands and lets it go
  *    on again: the hold is the engine's — player cut, beats cancelled, clock
  *    frozen — while the printing steps out of the music's way and runs at Pi's
  *    own pace until the beats come back.
@@ -111,7 +111,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	let lastCtx: ExtensionContext | undefined;
 	/** The task in progress is being performed — the transformer stands in for its text. */
 	let performing = false;
-	/** The rest of this task is not performed — `ctrl+shift+d` was pressed. */
+	/** The rest of this task is not performed — `ctrl+alt+d` was pressed. */
 	let skipped = false;
 	/** This task's performance broke down — a track that would not play — and is off. */
 	let failed = false;
@@ -215,7 +215,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	 */
 	function activity(): string {
 		if (!engine || !performing) return "";
-		if (engine.isPaused) return "⏸ 已暂停 · 打印照常 · ctrl+shift+p 继续";
+		if (engine.isPaused) return "⏸ 已暂停 · 打印照常 · ctrl+alt+p 继续";
 		if (!engine.queue.isEmpty) return "";
 		const now = Date.now();
 		if (idleSince === 0 || now - idleSince < IDLE_STILL_MS) return "";
@@ -455,7 +455,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 		await engine?.waitForCapacity();
 	});
 
-	pi.registerShortcut("ctrl+shift+d", {
+	pi.registerShortcut("ctrl+alt+d", {
 		description: "CodeDance: print the rest of the queue and stop the music",
 		handler: async () => {
 			// The flush hands the text back on its own; the task is not performed any
@@ -465,7 +465,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 		},
 	});
 
-	pi.registerShortcut("ctrl+shift+p", {
+	pi.registerShortcut("ctrl+alt+p", {
 		description: "CodeDance: hold the performance, or let it go on",
 		handler: async () => {
 			if (!engine) return;
