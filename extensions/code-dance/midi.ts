@@ -1,12 +1,13 @@
 /**
  * Minimal Standard MIDI File reader.
  *
- * CodeDance wants exactly four things from a `.mid`: when a note starts, how
- * hard it was struck, how high it sits and how long it is held. The first is the
- * print rhythm; the second is the accent that scales the budget of a single
- * onset; the last two are the stage's — the pitch sets how fine the ripple runs,
- * the length how long the strike's surge holds. Everything else the file
- * carries — controllers, pitch bend, program changes, lyrics — is stepped over.
+ * CodeDance wants exactly five things from a `.mid`: when a note starts, how
+ * hard it was struck, how high it sits, how long it is held and how many notes
+ * strike with it. The first is the print rhythm; the accent scales the budget
+ * of a single onset, the length is the time it buys and the chord the weight it
+ * carries; the pitch sets how fine the stage's ripple runs, and the length how
+ * long the strike's surge holds. Everything else the file carries —
+ * controllers, pitch bend, program changes, lyrics — is stepped over.
  *
  * The tempo map is followed, not averaged: a track that accelerates mid-way is
  * printed at the speed it actually plays. `format 1` files (one track per
@@ -29,6 +30,8 @@ export interface Onset {
 	pitch: number;
 	/** Seconds from the strike to its release, tempo changes and all; 0 when the file has no length to give. */
 	duration: number;
+	/** How many notes of the file sound as this one strike: a single note 1, a chord its size. */
+	thickness: number;
 }
 
 export interface Timeline {
@@ -265,12 +268,17 @@ function tempoMap(ppq: number, tempos: readonly TempoPoint[]): TempoMap {
 	};
 }
 
-/** Fold the notes of a chord into one onset: the hardest strike is the one it describes — accent, pitch and length. */
+/**
+ * Fold the notes of a chord into one onset: the hardest strike is the one it
+ * describes — accent, pitch and length — and the count of notes it folded is
+ * the thickness.
+ */
 function mergeChords(attacks: readonly Onset[]): Onset[] {
 	const merged: Onset[] = [];
 	for (const attack of attacks) {
 		const last = merged[merged.length - 1];
 		if (last && attack.seconds - last.seconds < CHORD_WINDOW_SECONDS) {
+			last.thickness += 1;
 			if (attack.velocity > last.velocity) {
 				last.velocity = attack.velocity;
 				last.pitch = attack.pitch;
@@ -299,6 +307,8 @@ export function readTimeline(bytes: Uint8Array): Timeline {
 				// half the old beat, half the new. A release the file never writes
 				// leaves the length 0 — there is none to be had.
 				duration: attack.heldTicks > 0 ? map.secondsAt(attack.tick + attack.heldTicks) - seconds : 0,
+				// Deeper counts come from `mergeChords`, which folds the chord's notes.
+				thickness: 1,
 			};
 		})
 		.sort((a, b) => a.seconds - b.seconds);

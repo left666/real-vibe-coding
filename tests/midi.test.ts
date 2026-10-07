@@ -62,6 +62,14 @@ test("a chord is one onset, accented by the hardest strike", () => {
 	const timeline = readTimeline(file);
 	assert.equal(timeline.onsets.length, 1);
 	close(timeline.onsets[0]!.velocity, 100 / 127);
+	// The count of notes that folded together is the onset's thickness.
+	assert.equal(timeline.onsets[0]!.thickness, 3);
+});
+
+test("a note all on its own is a chord of one", () => {
+	const file = sequence(header(0, 1, PPQ), track(tempo(0, 500_000), noteOn(0, 60, 100), endOfTrack()));
+
+	assert.equal(readTimeline(file).onsets[0]!.thickness, 1);
 });
 
 test("a note carries its pitch and how long it is held", () => {

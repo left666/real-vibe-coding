@@ -514,7 +514,9 @@ export class BeatEngine {
 	}
 
 	private strike(onset: Onset): void {
-		this.queue.reveal(burst(onset, this.view.bpm));
+		const bought = burst(onset, this.view.bpm);
+		if (bought.kind === "line") this.queue.revealLine();
+		else this.queue.reveal(bought.tokens);
 		this.view.energy = onset.velocity;
 		this.view.pitch = onset.pitch;
 		this.surgeMs = surgeFor(onset.duration);

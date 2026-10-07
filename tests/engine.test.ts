@@ -361,19 +361,49 @@ test("a long note rides its surge out", async (t) => {
 	assert.equal(engine.view.pulse, 0);
 });
 
-test("a long note pays out more text at the strike", async (t) => {
+test("a long note buys the whole line, not a count of tokens", async (t) => {
 	const dir = scratch();
-	// A whole note at 120 BPM: one strike buys the two seconds it sounds.
+	// A whole note at 120 BPM: one strike outgrows the token scale altogether.
 	const file = sequence(
 		header(0, 1, PPQ),
 		track(tempo(0, 500_000), noteOn(0, 60, VELOCITY), noteOff(4 * PPQ, 60), endOfTrack(8 * PPQ)),
 	);
 	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Long", file)] });
 
-	for (const chunk of chunks(70)) engine.feed(chunk, true);
+	// A line the eight tokens of a beat could never cover.
+	const line = "a line the tokens of a single beat could never cover\n";
+	engine.feed(line);
 	await clock.tick(0);
-	// Eight tokens is a beat at velocity 100; two held seconds buy thirty-four.
-	assert.equal(engine.queue.printed, chunks(34).join(""));
+	assert.equal(engine.queue.printed, line);
+});
+
+test("a whole-line strike landing mid-line takes the rest of the line and the next", async (t) => {
+	const dir = scratch();
+	// Three-beat notes at full velocity: every strike buys a line.
+	const file = sequence(
+		header(0, 1, PPQ),
+		track(
+			tempo(0, 500_000),
+			noteOn(0, 60, VELOCITY),
+			noteOff(3 * PPQ, 60),
+			noteOn(PPQ, 60, VELOCITY),
+			noteOff(3 * PPQ, 60),
+			endOfTrack(PPQ),
+		),
+	);
+	const { engine, clock } = rig(t, { tracks: [midiTrack(dir, "Long", file)] });
+
+	// The first strike opens a line the model has not finished.
+	engine.feed("start of the line");
+	await clock.tick(0);
+	assert.equal(engine.queue.printed, "start of the line");
+
+	// The second lands with the cursor mid-line: the rest of it and the next
+	// line come out in one piece.
+	engine.feed(" and the rest\nnext line\nthird line still queued");
+	await clock.tick(2_000);
+	assert.equal(engine.queue.printed, "start of the line and the rest\nnext line\n");
+	assert.equal(engine.queue.backlog, "third line still queued".length);
 });
 
 test("the sync offset delays the first strike so the print tracks the sound", async (t) => {
