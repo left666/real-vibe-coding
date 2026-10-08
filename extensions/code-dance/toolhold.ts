@@ -10,7 +10,10 @@
  * stage, the wrapper answers with the same one-line notice the markdown
  * transformer uses for prose; once the printing has passed where the block's
  * text ends, the wrapper delegates to the real renderer and the block returns
- * to its usual look.
+ * to its usual look. A call block that draws a preview of the work itself — a
+ * write's text, an edit's diff — waits for the work, not merely its line: the
+ * preview is the work again, and showing it early would hand the transcript
+ * what the stage has not performed yet.
  *
  * Queue positions are what the rest of the extension already tracks: `open`
  * marks where a call's line ends, `close` where the result's text ends (or that
@@ -45,6 +48,31 @@ interface Hold {
 	callEnd: number;
 	/** Where the result's text ends; 0 when there is nothing to wait for; null while the tool still runs. */
 	resultEnd: number | null;
+	/** The call block draws a preview of the work itself: it waits for the work, not just the line. */
+	workPreview: boolean;
+}
+
+/**
+ * The tools whose call block draws a preview of the work itself — the text a
+ * write puts down, the diff an edit works out. The preview is derived from the
+ * same arguments the stage takes the work from, so revealing it early would
+ * show text the music has not performed.
+ */
+const WORK_PREVIEWS: ReadonlySet<string> = new Set(["write", "edit"]);
+
+/** No reveal point: the block waits on work that has not been queued yet. */
+const UNREVEALED = Number.POSITIVE_INFINITY;
+
+/**
+ * Where a call block's wait ends. Usually where its line ends. A block that
+ * previews the work waits for the work instead: unrevealed while the tool
+ * still runs, back to the line's end when the result performed nothing, and
+ * where the work ends when it did.
+ */
+function callReveal(hold: Hold): number {
+	if (!hold.workPreview) return hold.callEnd;
+	if (hold.resultEnd === null) return UNREVEALED;
+	return hold.resultEnd === 0 ? hold.callEnd : hold.resultEnd;
 }
 
 export interface HoldPorts {
@@ -70,18 +98,26 @@ export class ToolHold {
 		this.pending.add(id);
 	}
 
-	/** The call's line is in the queue, ending at `callEnd`. */
-	open(id: string, callEnd: number): void {
+	/** The call's line is in the queue, ending at `callEnd`; the tool's name decides how long the block is held. */
+	open(id: string, callEnd: number, name: string): void {
 		this.pending.delete(id);
 		if (!this.ports.enabled()) return;
-		this.holds.set(id, { callEnd, resultEnd: null });
+		this.holds.set(id, { callEnd, resultEnd: null, workPreview: WORK_PREVIEWS.has(name) });
 	}
 
-	/** Nothing more will be queued for the tool. `resultEnd` is where its text ends, or 0 when there is none. */
-	close(id: string, resultEnd: number): void {
+	/**
+	 * Nothing more will be queued for the tool. `resultEnd` is where its text
+	 * ends, or 0 when there is none. Returns true when this close is what
+	 * revealed the call block — a previewing block whose work performed
+	 * nothing: `crossed` only sees printing steps, and this reveal has none.
+	 */
+	close(id: string, resultEnd: number): boolean {
 		this.pending.delete(id);
 		const hold = this.holds.get(id);
-		if (hold) hold.resultEnd = resultEnd;
+		if (!hold) return false;
+		const revealed = hold.workPreview && resultEnd === 0 && this.ports.printed() >= hold.callEnd;
+		hold.resultEnd = resultEnd;
+		return revealed;
 	}
 
 	/** What the call block should draw. */
@@ -89,7 +125,7 @@ export class ToolHold {
 		if (!this.ports.enabled()) return "shown";
 		const hold = this.holds.get(id);
 		if (!hold) return this.pending.has(id) ? "printing" : "shown";
-		return this.ports.printed() >= hold.callEnd ? "shown" : "staged";
+		return this.ports.printed() >= callReveal(hold) ? "shown" : "staged";
 	}
 
 	/** What the result block should draw. */
@@ -108,7 +144,8 @@ export class ToolHold {
 	/** A held block ended inside the queue's latest step: worth a repaint. */
 	crossed(previous: number, printed: number): boolean {
 		for (const hold of this.holds.values()) {
-			if (previous < hold.callEnd && hold.callEnd <= printed) return true;
+			const reveal = callReveal(hold);
+			if (previous < reveal && reveal <= printed) return true;
 			const end = hold.resultEnd;
 			if (end !== null && end !== 0 && previous < end && end <= printed) return true;
 		}
@@ -127,13 +164,55 @@ interface ResultBlock {
 	text?: string;
 }
 
-/** The text a tool result carries — what the stage is asked to perform of it. */
-export function resultText(result: { readonly content: readonly ResultBlock[] }): string {
+/** What a result offers the policy below: its text blocks, and whatever details the tool attached. */
+interface ResultLike {
+	readonly content: readonly ResultBlock[];
+	readonly details?: unknown;
+}
+
+/** A string argument of a tool call, or null when the call did not carry one. */
+function argumentText(args: unknown, key: string): string | null {
+	const fields = typeof args === "object" && args !== null ? (args as Record<string, unknown>) : undefined;
+	const value = fields?.[key];
+	return typeof value === "string" ? value : null;
+}
+
+/** The diff an edit worked out, or null when the result carries none. */
+function diffText(details: unknown): string | null {
+	const diff = (details as { diff?: unknown } | undefined)?.diff;
+	return typeof diff === "string" ? diff : null;
+}
+
+/** The text blocks of a result, joined the way Pi joins them. */
+function textBlocks(result: ResultLike): string {
 	const texts: string[] = [];
 	for (const block of result.content) {
 		if (block.type === "text" && typeof block.text === "string") texts.push(block.text);
 	}
 	return texts.join("\n");
+}
+
+/**
+ * What the stage is asked to perform of a tool result.
+ *
+ * The result's own text usually is that: the blocks it carries, joined. Three
+ * tools differ. A `read` is asked for nothing — what it brought in is input,
+ * not output. `write` and `edit` hand back a one-line receipt, and the stage
+ * performs the work instead of the receipt: the text a write put down, the diff
+ * an edit worked out. A receipt with the work missing — an error's message, a
+ * result shape that carries none — is performed as it is.
+ */
+export function resultText(toolName: string, args: unknown, result: ResultLike, isError: boolean): string {
+	if (toolName === "read") return "";
+	if (!isError && toolName === "write") {
+		const content = argumentText(args, "content");
+		if (content !== null) return content;
+	}
+	if (!isError && toolName === "edit") {
+		const diff = diffText(result.details);
+		if (diff !== null) return diff;
+	}
+	return textBlocks(result);
 }
 
 type AnyDefinition = ToolDefinition<any, any, any>;
@@ -153,9 +232,9 @@ function wrapCall(render: CallRenderer, name: string, hold: ToolHold): CallRende
 	};
 }
 
-function wrapResult(render: ResultRenderer, hold: ToolHold): ResultRenderer {
+function wrapResult(render: ResultRenderer, name: string, hold: ToolHold): ResultRenderer {
 	return (result, options, theme, context) => {
-		const text = resultText(result);
+		const text = resultText(name, context.args, result, context.isError);
 		if (text !== "") {
 			const state = hold.resultState(context.toolCallId, options.isPartial);
 			if (state !== "shown") {
@@ -174,7 +253,7 @@ function holdDefinition(definition: AnyDefinition, hold: ToolHold): AnyDefinitio
 	return {
 		...definition,
 		renderCall: call ? wrapCall(call, definition.name, hold) : call,
-		renderResult: result ? wrapResult(result, hold) : result,
+		renderResult: result ? wrapResult(result, definition.name, hold) : result,
 	};
 }
 

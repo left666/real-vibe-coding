@@ -16,8 +16,10 @@
  * 2. The built-in tools are registered again with their renderers wrapped
  *    (`toolhold.ts`), which holds a tool's block — the call line while it
  *    streams and runs, the result once it lands — behind the same notice, and
- *    hands each the real renderer the moment its text is on the stage. This is
- *    the transformer's trick applied where markdown never reaches.
+ *    hands each the real renderer the moment its text is on the stage: a write's
+ *    or an edit's call block draws a preview of the work itself, so it waits for
+ *    the work rather than just the line. This is the transformer's trick applied
+ *    where markdown never reaches.
  * 3. A widget above the editor performs the queue on the onsets of a MIDI track
  *    while its `.wav` plays beside it. It is mounted with the task's first
  *    output and taken down when the performance ends, so an idle screen has no
@@ -35,7 +37,9 @@
  * they stream, a tool call's line from `tool_execution_start` (the transformer
  * never sees a call), and a tool result's text from `tool_result` — a handler
  * that only observes, because returning anything there would replace the result
- * itself, the copy the model reads.
+ * itself, the copy the model reads. That text is not always the result's own: a
+ * `read`'s content is input and stays off the stage, and for `write` and `edit`
+ * the stage performs the work rather than the receipt.
  */
 
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from "@earendil-works/pi-coding-agent";
@@ -211,7 +215,7 @@ export default function codeDance(pi: ExtensionAPI): void {
 	}
 
 	/**
-	 * The line under the meter while the queue is dry: what the performance is
+	 * The stage's last row while the queue is dry: what the performance is
 	 * waiting on, named — a tool still running, with its seconds, or the model
 	 * itself. Empty hides the row, so the text keeps every row the panel has the
 	 * rest of the time. A held performance keeps the row whatever the queue is
@@ -420,11 +424,12 @@ export default function codeDance(pi: ExtensionAPI): void {
 	pi.on("tool_execution_start", async (event) => {
 		if (!engine) return;
 		// The call's line goes into the queue and the block is bound to it: the
-		// span the block is held for ends where the line ends.
+		// span the block is held for ends where the line ends — or, when the block
+		// previews the work itself (write, edit), where that work ends.
 		const text = toolCallText(event.toolName, event.args, engine.queue.tail);
 		const end = engine.queue.total + text.length;
 		if (perform(text)) {
-			hold.open(event.toolCallId, end);
+			hold.open(event.toolCallId, end, event.toolName);
 			// If the queue drains while the tool still runs, the activity row names it.
 			running.set(event.toolCallId, { line: callLine(event.toolName, event.args), since: Date.now() });
 		}
@@ -433,11 +438,14 @@ export default function codeDance(pi: ExtensionAPI): void {
 	pi.on("tool_result", async (event) => {
 		if (!engine) return;
 		running.delete(event.toolCallId);
-		// Where the result's text ends, read off before it is queued; 0 marks a
-		// result the stage will not print — nothing to wait for.
-		const text = resultText(event);
+		// The result's text as the stage takes it — `resultText` decides it tool by
+		// tool. Where it ends is read off before it is queued; 0 marks a result the
+		// stage will not print — nothing to wait for.
+		const text = resultText(event.toolName, event.input, event, event.isError);
 		const end = engine.queue.total + text.length;
-		hold.close(event.toolCallId, text !== "" && perform(text) ? end : 0);
+		// A previewing call block this close reveals never crosses the queue, so
+		// the repaint is asked for here.
+		if (hold.close(event.toolCallId, text !== "" && perform(text) ? end : 0)) stage?.repaint();
 	});
 
 	pi.on("tool_call", async (event) => {

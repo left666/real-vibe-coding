@@ -1,8 +1,8 @@
 /**
  * The stage: the widget above the editor where the queue is performed.
  *
- * Exactly `stageHeight` rows — a header, the meter, a line of activity while
- * the queue is dry, and the tail of the text printed so far. Only the tail: the
+ * Exactly `stageHeight` rows — a header, the meter, the tail of the text printed
+ * so far, and a line of activity while the queue is dry. Only the tail: the
  * panel's height is fixed, so a whole task's output can only pass through it,
  * never sit in it. New lines appear at the bottom edge and the older ones slide
  * up out of the panel.
@@ -15,10 +15,10 @@
  * surges it, a longer note surging longer. The wave travels with the tempo, so
  * the row is never still while a track plays.
  *
- * Between songs there is nothing to ripple against: while the queue is dry, a
- * line under the meter says what the performance is waiting on, so the panel
- * never reads as stopped. A held performance is the exception the header
- * carries: it says `paused` on the row that is always there.
+ * Between songs there is nothing to ripple against: while the queue is dry, the
+ * panel's last row says what the performance is waiting on, so the panel never
+ * reads as stopped. A held performance is the exception the header carries: it
+ * says `paused` on the row that is always there.
  */
 
 import type { ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
@@ -121,7 +121,7 @@ export interface StageOptions {
 	view(): StageView;
 	text(): string;
 	height(): number;
-	/** The line under the meter while nothing is printing; "" hides the row and gives it back to the text. */
+	/** The panel's last row while nothing is printing; "" hides the row and gives it back to the text. */
 	activity?(): string;
 	/** Wall clock in milliseconds; injected by tests. */
 	now?: () => number;
@@ -182,13 +182,15 @@ class StageComponent implements Component {
 		}
 
 		lines.push(truncateToWidth(this.theme.fg("accent", meter(view, width, this.travel(view))), width, "", true));
-		if (onStage) lines.push(truncateToWidth(this.theme.fg("dim", activity), width, "", true));
 
 		const tail = this.tailRows(this.options.text(), width, rows);
-		// Anchored to the bottom: the newest line is always the panel's last, so
+		// Anchored to the bottom: the newest line is always the last text row, so
 		// the reader's eye has one place to rest while a task prints.
 		for (let blank = rows - tail.length; blank > 0; blank--) lines.push("");
 		lines.push(...tail);
+		// The wait closes the panel, right where the eye rests: the row that
+		// explains why nothing moves is the last one read.
+		if (onStage) lines.push(truncateToWidth(this.theme.fg("dim", activity), width, "", true));
 		return lines;
 	}
 

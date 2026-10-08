@@ -29,7 +29,11 @@ interface ToolDefinition {
 }
 
 /** A theme that leaves the text alone; the renderers under test only style it. */
-const PLAIN_THEME = { fg: (_color: string, text: string) => text, bold: (text: string) => text };
+const PLAIN_THEME = {
+	fg: (_color: string, text: string) => text,
+	bg: (_color: string, text: string) => text,
+	bold: (text: string) => text,
+};
 
 /** Every track the package ships; each is one the playlist may reach for. */
 const PACKAGED = ["Angry Birds.mid", "Elysium.mid", "Graze The Roof.mid", "He's a Pirate.mid", "Night Cruising.mid"];
@@ -344,9 +348,9 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 		PLAIN_THEME,
 	);
 	const lines = () => component.render(60);
-	// The text rows: header, meter, and — while held — the activity row, then the
-	// bottom-anchored tail.
-	const tail = () => lines().slice(3).join("\n");
+	// Everything under the meter: the text rows, and — while held — the wait that
+	// closes the panel.
+	const tail = () => lines().slice(2).join("\n");
 	const until = async (done: () => boolean): Promise<boolean> => {
 		const deadline = Date.now() + 4000;
 		while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 15));
@@ -356,13 +360,13 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	assert.ok(await until(() => tail().includes("#6")), "the first strike should print the first tokens");
 	assert.ok(!tail().includes("#8"), "the second strike is still two seconds out");
 
-	// The hold: the header says so, and the row under the meter says the printing
-	// is not the thing being held.
+	// The hold: the header says so, and the row that closes the panel says the
+	// printing is not the thing being held.
 	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+alt+p")!;
 	await pause.handler();
 	assert.match(lines()[0]!, /⏸ paused/);
-	assert.match(lines()[2]!, /printing goes on/);
-	assert.match(lines()[2]!, /ctrl\+alt\+p to resume/);
+	assert.match(lines().at(-1)!, /printing goes on/);
+	assert.match(lines().at(-1)!, /ctrl\+alt\+p to resume/);
 	assert.deepEqual(notifications, ["♪ performance paused · printing goes on"]);
 
 	// The beats are gone, so the queue is not held: the rest went out at once.
@@ -479,14 +483,14 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 		{
 			message: {
 				role: "assistant",
-				content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { file_path: "a.ts" } }],
+				content: [{ type: "toolCall", id: "call-1", name: "bash", arguments: { command: "npm test" } }],
 			},
 			assistantMessageEvent: { type: "toolcall_delta", contentIndex: 0, delta: "{}" },
 		},
 		ctx,
 	);
 	await stub.events.get("tool_execution_start")!(
-		{ toolCallId: "call-1", toolName: "read", args: { file_path: "a.ts" } },
+		{ toolCallId: "call-1", toolName: "bash", args: { command: "npm test" } },
 		ctx,
 	);
 
@@ -494,27 +498,29 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 	const factory = widgets[0]!.factory as (tui: unknown, theme: unknown) => { render(width: number): string[] };
 	const component = factory({ requestRender: () => {}, invalidate: () => {} }, PLAIN_THEME);
 	const rendered = () => component.render(60).join("\n");
+	const lastRow = () => component.render(60).at(-1)!.trimEnd();
 	const until = async (done: () => boolean): Promise<boolean> => {
 		const deadline = Date.now() + 4000;
 		while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
 		return done();
 	};
 
-	// The line has printed and the tool still runs: the panel waits out loud,
-	// naming the tool and its seconds.
-	assert.ok(await until(() => /⏳ read a\.ts · \d+s/.test(rendered())));
+	// The line has printed and the tool still runs: the panel's last row waits
+	// out loud, naming the tool and its seconds.
+	assert.ok(await until(() => /^⏳ \$ npm test · \d+s$/.test(lastRow())));
 	assert.equal(component.render(60).length, 12);
 
 	// The result reaches the queue — something to print again — and the wait
 	// is over.
 	await stub.events.get("tool_result")!(
-		{ toolCallId: "call-1", content: [{ type: "text", text: "hello world" }], isError: false },
+		{ toolCallId: "call-1", toolName: "bash", content: [{ type: "text", text: "hello world" }], isError: false },
 		ctx,
 	);
 	assert.doesNotMatch(rendered(), /⏳/);
 
-	// Once the result has printed too, the wait is the model's.
-	assert.ok(await until(() => rendered().includes("waiting for the model")));
+	// Once the result has printed too, the wait is the model's — still the row
+	// that closes the panel.
+	assert.ok(await until(() => lastRow() === "⏳ waiting for the model…"));
 	assert.equal(component.render(60).length, 12);
 
 	await stub.events.get("agent_settled")!({}, ctx);
@@ -552,14 +558,14 @@ test("a tool block stands in until the stage has printed it, then renders itself
 	await stub.events.get("session_start")!({}, ctx);
 
 	// The built-in tools are registered again, this time with their renderers
-	// wrapped: the read tool's definition is what draws the block below.
+	// wrapped: the grep tool's definition is what draws the block below.
 	assert.deepEqual(
 		stub.tools.map((tool) => tool.name).sort(),
 		["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"],
 	);
-	const read = stub.tools.find((tool) => tool.name === "read")!;
-	assert.ok(read.renderCall);
-	assert.ok(read.renderResult);
+	const grep = stub.tools.find((tool) => tool.name === "grep")!;
+	assert.ok(grep.renderCall);
+	assert.ok(grep.renderResult);
 
 	const renderContext = {
 		toolCallId: "call-1",
@@ -569,9 +575,9 @@ test("a tool block stands in until the stage has printed it, then renders itself
 		isError: false,
 		lastComponent: undefined,
 	};
-	const callBlock = () => read.renderCall!({ file_path: "a.ts" }, PLAIN_THEME, renderContext).render(200).join("\n");
+	const callBlock = () => grep.renderCall!({ pattern: "TODO", path: "src" }, PLAIN_THEME, renderContext).render(200).join("\n");
 	const resultBlock = (isPartial: boolean) =>
-		read.renderResult!(
+		grep.renderResult!(
 			{ content: [{ type: "text", text: "hello world" }] },
 			{ expanded: false, isPartial },
 			PLAIN_THEME,
@@ -586,37 +592,316 @@ test("a tool block stands in until the stage has printed it, then renders itself
 		{
 			message: {
 				role: "assistant",
+				content: [{ type: "toolCall", id: "call-1", name: "grep", arguments: { pattern: "TODO", path: "src" } }],
+			},
+			assistantMessageEvent: { type: "toolcall_delta", contentIndex: 0, delta: "{}" },
+		},
+		ctx,
+	);
+	assert.match(callBlock(), /▶ printing · grep \/TODO\/ in src/);
+
+	// The line is queued at the tool's start; the block says so until it prints.
+	await stub.events.get("tool_execution_start")!(
+		{ toolCallId: "call-1", toolName: "grep", args: { pattern: "TODO", path: "src" } },
+		ctx,
+	);
+	assert.match(callBlock(), /▶ performing · grep \/TODO\/ in src/);
+
+	// The result lands and waits in the queue under its own notice.
+	await stub.events.get("tool_result")!(
+		{ toolCallId: "call-1", toolName: "grep", content: [{ type: "text", text: "hello world" }], isError: false },
+		ctx,
+	);
+	assert.match(resultBlock(false), /▶ performing · 1 line · 11 chars/);
+
+	// The strike prints both; each block hands itself back to its own renderer —
+	// the grep renderer for the call, and the text for the result.
+	const deadline = Date.now() + 4000;
+	while (callBlock().includes("performing") && Date.now() < deadline) {
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	assert.match(callBlock(), /grep \/TODO\/ in src/);
+	assert.doesNotMatch(callBlock(), /performing|printing/);
+	assert.match(resultBlock(false), /hello world/);
+	assert.doesNotMatch(resultBlock(false), /performing|printing/);
+
+	await stub.events.get("agent_settled")!({}, ctx);
+	await stub.events.get("session_shutdown")!({}, ctx);
+});
+
+test("the content of a read file is not performed", async (t) => {
+	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	t.after(() => {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		rmSync(agentDir, { recursive: true, force: true });
+	});
+
+	// Strikes every half second: were the file's text queued, the stage would
+	// have printed all of it before the watch below is over.
+	const beat = sequence(
+		header(0, 1, 480),
+		track(noteOn(0, 60, 100), noteOn(480, 60, 100), noteOn(480, 60, 100), noteOn(480, 60, 100), endOfTrack(480 * 100)),
+	);
+	shadowLibrary(agentDir, beat);
+
+	const stub = extension();
+	const widgets: { key: string; factory: unknown }[] = [];
+	const ctx = {
+		mode: "tui",
+		cwd: process.cwd(),
+		isProjectTrusted: () => false,
+		ui: {
+			notify: () => {},
+			setWidget: (key: string, factory: unknown) => void widgets.push({ key, factory }),
+			setStatus: () => {},
+			theme: PLAIN_THEME,
+		},
+	};
+
+	await stub.events.get("session_start")!({}, ctx);
+	await stub.events.get("message_update")!(
+		{
+			message: {
+				role: "assistant",
 				content: [{ type: "toolCall", id: "call-1", name: "read", arguments: { file_path: "a.ts" } }],
 			},
 			assistantMessageEvent: { type: "toolcall_delta", contentIndex: 0, delta: "{}" },
 		},
 		ctx,
 	);
-	assert.match(callBlock(), /▶ printing · read a\.ts/);
-
-	// The line is queued at the tool's start; the block says so until it prints.
 	await stub.events.get("tool_execution_start")!(
 		{ toolCallId: "call-1", toolName: "read", args: { file_path: "a.ts" } },
 		ctx,
 	);
-	assert.match(callBlock(), /▶ performing · read a\.ts/);
 
-	// The result lands and waits in the queue under its own notice.
+	const factory = widgets[0]!.factory as (tui: unknown, theme: unknown) => { render(width: number): string[] };
+	const component = factory({ requestRender: () => {}, invalidate: () => {} }, PLAIN_THEME);
+	const rendered = () => component.render(60).join("\n");
+	const until = async (done: () => boolean): Promise<boolean> => {
+		const deadline = Date.now() + 4000;
+		while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+		return done();
+	};
+
+	// The call line is performed as ever: it is the agent's own text, not the file.
+	assert.ok(await until(() => rendered().includes("read a.ts")));
+
+	// The file lands: its block draws itself at once — expanded, the text right
+	// there — with nothing of it waiting on the stage.
+	const body = "const secret = 1;";
 	await stub.events.get("tool_result")!(
-		{ toolCallId: "call-1", content: [{ type: "text", text: "hello world" }], isError: false },
+		{ toolCallId: "call-1", toolName: "read", content: [{ type: "text", text: body }], isError: false },
 		ctx,
 	);
-	assert.match(resultBlock(false), /▶ performing · 1 line · 11 chars/);
+	const read = stub.tools.find((tool) => tool.name === "read")!;
+	const resultBlock = read
+		.renderResult!(
+			{ content: [{ type: "text", text: body }] },
+			{ expanded: true, isPartial: false },
+			PLAIN_THEME,
+			{ toolCallId: "call-1", cwd: process.cwd(), expanded: false, showImages: true, isError: false, lastComponent: undefined },
+		)
+		.render(200)
+		.join("\n");
+	assert.match(resultBlock, /const secret = 1;/);
+	assert.doesNotMatch(resultBlock, /▶|performing|printing/);
 
-	// The strike prints both; each block hands itself back to its own renderer —
-	// the read renderer for the call, and emptiness for the collapsed result.
-	const deadline = Date.now() + 4000;
-	while (callBlock().includes("performing") && Date.now() < deadline) {
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	assert.match(callBlock(), /read.*a\.ts/);
-	assert.doesNotMatch(callBlock(), /performing|printing/);
-	assert.doesNotMatch(resultBlock(false), /performing/);
+	// Beats come and go; the file's text never reaches the stage.
+	await new Promise((resolve) => setTimeout(resolve, 1200));
+	assert.doesNotMatch(rendered(), /secret/);
+	assert.match(rendered(), /read a\.ts/);
+
+	await stub.events.get("agent_settled")!({}, ctx);
+	await stub.events.get("session_shutdown")!({}, ctx);
+});
+
+/** A stage harness over the beats, the stub and the panel, for one tool's result. */
+async function staged(t: { after(fn: () => void): void }, args: Record<string, unknown>, name: string) {
+	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	t.after(() => {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		rmSync(agentDir, { recursive: true, force: true });
+	});
+
+	// Strikes half a second apart: the call line prints on the first one after it
+	// lands, and the work — priced token by token — takes several beats, so the
+	// block that previews it can be watched standing in.
+	const beat = sequence(
+		header(0, 1, 480),
+		track(
+			noteOn(0, 60, 100),
+			noteOn(480, 60, 100),
+			noteOn(480 * 2, 60, 100),
+			noteOn(480 * 3, 60, 100),
+			noteOn(480 * 4, 60, 100),
+			noteOn(480 * 5, 60, 100),
+			noteOn(480 * 6, 60, 100),
+			noteOn(480 * 7, 60, 100),
+			endOfTrack(480 * 100),
+		),
+	);
+	shadowLibrary(agentDir, beat);
+
+	const stub = extension();
+	const widgets: { key: string; factory: unknown }[] = [];
+	const ctx = {
+		mode: "tui",
+		cwd: process.cwd(),
+		isProjectTrusted: () => false,
+		ui: {
+			notify: () => {},
+			setWidget: (key: string, factory: unknown) => void widgets.push({ key, factory }),
+			setStatus: () => {},
+			theme: PLAIN_THEME,
+		},
+	};
+
+	await stub.events.get("session_start")!({}, ctx);
+	await stub.events.get("message_update")!(
+		{
+			message: { role: "assistant", content: [{ type: "toolCall", id: "call-1", name, arguments: args }] },
+			assistantMessageEvent: { type: "toolcall_delta", contentIndex: 0, delta: "{}" },
+		},
+		ctx,
+	);
+	await stub.events.get("tool_execution_start")!({ toolCallId: "call-1", toolName: name, args }, ctx);
+
+	const factory = widgets[0]!.factory as (tui: unknown, theme: unknown) => { render(width: number): string[] };
+	const component = factory({ requestRender: () => {}, invalidate: () => {} }, PLAIN_THEME);
+	return {
+		stub,
+		ctx,
+		tool: stub.tools.find((tool) => tool.name === name)!,
+		rendered: () => component.render(60).join("\n"),
+		until: async (done: () => boolean): Promise<boolean> => {
+			const deadline = Date.now() + 4000;
+			while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+			return done();
+		},
+	};
+}
+
+test("a write performs the text it put down, not its receipt", async (t) => {
+	const content = Array.from({ length: 6 }, (_, line) => `const line${line} = ${line};`).join("\n");
+	const { stub, ctx, tool, rendered, until } = await staged(t, { path: "notes.ts", content }, "write");
+
+	// The call line is performed; the write is named before the work prints.
+	assert.ok(await until(() => rendered().includes("write notes.ts")));
+
+	const receipt = { content: [{ type: "text", text: "Successfully wrote to notes.ts" }], details: undefined };
+	await stub.events.get("tool_result")!(
+		{ toolCallId: "call-1", toolName: "write", input: { path: "notes.ts", content }, ...receipt, isError: false },
+		ctx,
+	);
+
+	// The call block previews the work itself, so it stands in with the result's:
+	// its line printed long ago, and the work is still beats away.
+	const callBlock = () =>
+		tool
+			.renderCall!({ path: "notes.ts", content }, PLAIN_THEME, {
+				toolCallId: "call-1",
+				cwd: process.cwd(),
+				expanded: false,
+				argsComplete: true,
+				lastComponent: undefined,
+			})
+			.render(200)
+			.join("\n");
+	assert.match(callBlock(), /▶ performing · write notes\.ts/);
+
+	// The result block stands in for the text put down — the receipt is not what waits.
+	const resultBlock = () =>
+		tool
+			.renderResult!(receipt, { expanded: false, isPartial: false }, PLAIN_THEME, {
+				toolCallId: "call-1",
+				cwd: process.cwd(),
+				expanded: false,
+				showImages: true,
+				isError: false,
+				lastComponent: undefined,
+				args: { path: "notes.ts", content },
+			})
+			.render(200)
+			.join("\n");
+	assert.match(resultBlock(), /▶ performing · 6 lines · 101 chars/);
+
+	// The strikes print the text itself; the receipt never reaches the stage.
+	assert.ok(await until(() => rendered().includes("const line5 = 5;")), "the last line of the work is what marks it printed");
+	assert.doesNotMatch(rendered(), /Successfully/);
+
+	// The work is printed; only now does the preview draw itself.
+	assert.doesNotMatch(callBlock(), /▶/);
+	assert.match(callBlock(), /write notes\.ts/);
+	assert.ok(callBlock().split("\n").length >= 3, "the preview is there, not just the line");
+
+	await stub.events.get("agent_settled")!({}, ctx);
+	await stub.events.get("session_shutdown")!({}, ctx);
+});
+
+test("an edit performs the diff it worked out, not its receipt", async (t) => {
+	const diff = ["-1 let x = 1;", "+1 let x = 2;", "-4 let y = 3;", "+4 let y = 4;", "-7 let z = 5;", "+7 let z = 6;"].join("\n");
+	const edits = [{ oldText: "let x = 1;", newText: "let x = 2;" }];
+	const { stub, ctx, tool, rendered, until } = await staged(t, { path: "a.ts", edits }, "edit");
+
+	// The call line is performed; the edit is named before the diff prints.
+	assert.ok(await until(() => rendered().includes("edit a.ts")));
+
+	const result = {
+		content: [{ type: "text", text: "Successfully replaced 1 block(s) in a.ts." }],
+		details: { diff, patch: "", firstChangedLine: 1 },
+	};
+	await stub.events.get("tool_result")!(
+		{ toolCallId: "call-1", toolName: "edit", input: { path: "a.ts", edits }, ...result, isError: false },
+		ctx,
+	);
+
+	// The call block previews the diff itself, so it stands in with the result's:
+	// the preview the renderer works out from the call's args is held back until
+	// the diff has printed.
+	const callBlock = () =>
+		tool
+			.renderCall!({ path: "a.ts", edits }, PLAIN_THEME, {
+				toolCallId: "call-1",
+				cwd: process.cwd(),
+				expanded: false,
+				argsComplete: true,
+				lastComponent: undefined,
+				state: {},
+				invalidate: () => {},
+			})
+			.render(200)
+			.join("\n");
+	assert.match(callBlock(), /▶ performing · edit a\.ts/);
+
+	// The block stands in for the diff — six lines, not the receipt's one.
+	const resultBlock = () =>
+		tool
+			.renderResult!(result, { expanded: false, isPartial: false }, PLAIN_THEME, {
+				toolCallId: "call-1",
+				cwd: process.cwd(),
+				expanded: false,
+				showImages: true,
+				isError: false,
+				lastComponent: undefined,
+				args: { path: "a.ts", edits },
+			})
+			.render(200)
+			.join("\n");
+	assert.match(resultBlock(), /▶ performing · 6 lines · 83 chars/);
+
+	// The strikes print the diff; the receipt never reaches the stage.
+	assert.ok(await until(() => rendered().includes("+7 let z = 6;")), "the last line of the diff is what marks it printed");
+	assert.doesNotMatch(rendered(), /Successfully/);
+
+	// The diff is printed; only now does the preview draw itself.
+	assert.doesNotMatch(callBlock(), /▶/);
+	assert.match(callBlock(), /edit a\.ts/);
 
 	await stub.events.get("agent_settled")!({}, ctx);
 	await stub.events.get("session_shutdown")!({}, ctx);
