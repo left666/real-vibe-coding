@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Onset } from "../extensions/code-dance/midi.ts";
-import type { Burst } from "../extensions/code-dance/queue.ts";
-import { PrintQueue, burst } from "../extensions/code-dance/queue.ts";
+import type { Onset } from "../extensions/real-vibe-coding/midi.ts";
+import type { Burst } from "../extensions/real-vibe-coding/queue.ts";
+import { PrintQueue, burst } from "../extensions/real-vibe-coding/queue.ts";
 
 /** A middle-key strike with no length in the file, the neutral the other cases vary from. */
 function onset(velocity: number, overrides: Partial<Onset> = {}): Onset {

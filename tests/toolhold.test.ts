@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ToolHold, resultText } from "../extensions/code-dance/toolhold.ts";
+import { ToolHold, resultText } from "../extensions/real-vibe-coding/toolhold.ts";
 
 /** A hold over mutable stand-ins for the queue and the config. */
 function holding(): { hold: ToolHold; printed: { value: number }; on: { value: boolean } } {

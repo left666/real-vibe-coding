@@ -1,5 +1,5 @@
 {
-	"name": "pi-code-dance",
+	"name": "real-vibe-coding",
 	"version": "0.1.0",
 	"description": "A Pi extension that performs the agent's output — prose, reasoning and tool text alike — in time with MIDI music: a beat-synced stage panel, a look-ahead print queue, and a pluggable audio backend.",
 	"type": "module",
@@ -24,7 +24,7 @@
 	},
 	"pi": {
 		"extensions": [
-			"./extensions/code-dance/index.ts"
+			"./extensions/real-vibe-coding/index.ts"
 		]
 	},
 	"peerDependencies": {

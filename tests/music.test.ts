@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { test } from "node:test";
 
-import { bundledMusicDir, collectTracks } from "../extensions/code-dance/library.ts";
-import { readTimeline } from "../extensions/code-dance/midi.ts";
+import { bundledMusicDir, collectTracks } from "../extensions/real-vibe-coding/library.ts";
+import { readTimeline } from "../extensions/real-vibe-coding/midi.ts";
 
 /** The tracks that ship with the package are the ones a first run performs. */
 const tracks = collectTracks([bundledMusicDir()]);

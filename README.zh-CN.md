@@ -1,12 +1,14 @@
-# pi-code-dance
+# real-vibe-coding
 
-让对话里出现的一切都跟着音乐的节拍、一个 token 一个 token 地浮现。CodeDance
-用 MIDI 文件作为节奏基准，播放同名音频，并在编辑器上方的舞台面板里按拍揭示
+[English](README.md)
+
+一个Pi扩展，让对话里出现的一切都跟着音乐的节拍、一个 token 一个 token 或整行地浮现。
+RealVibeCoding 用 MIDI 文件作为节奏基准，播放同名音频，并在编辑器上方的舞台面板里按拍揭示
 Pi 会打印的内容——助手的正文、思考过程、每一次工具调用那一行。
-思考阶段音乐不停，力度条继续波动，等下一段内容到达再接着打印；等待期间，
-舞台自己的活动行会说明它在等谁——某个还在跑的工具，还是模型本身。
 
 ## 效果
+
+[演示视频](docs/demonstration.mp4)
 
 ```
 ♪ He's a Pirate · 200 BPM · 0:42/1:17 · sequential
@@ -75,29 +77,29 @@ Pi 会打印的内容——助手的正文、思考过程、每一次工具调�
 ## 安装
 
 ```bash
-pi install npm:pi-code-dance
+pi install npm:real-vibe-coding
 ```
 
 或者只在本次会话里试用：
 
 ```bash
-pi -e npm:pi-code-dance
+pi -e npm:real-vibe-coding
 ```
 
 ## 曲库
-CodeDance 有自带的曲库。
+RealVibeCoding 有自带的曲库。
 
-如需自定义曲库，则需把成对的文件放进 `<agent 目录>/code-dance/music/`，例如
-`~/.pi/agent/code-dance/music/He's a Pirate.mid` 和同目录下的
-`He's a Pirate.wav`，CodeDance 会自动找到它们。
+如需自定义曲库，则需把成对的文件放进 `<agent 目录>/real-vibe-coding/music/`，例如
+`~/.pi/agent/real-vibe-coding/music/He's a Pirate.mid` 和同目录下的
+`He's a Pirate.wav`，RealVibeCoding 会自动找到它们。
 
 `.mid` 提供节奏，`.wav` 提供声音。两者应当是同一份演奏——打印跟随 MIDI 的
 起音点，音频同步播放，所以如果两者对不上，就会看到代码逐渐脱离节拍。
 
 ## 配置
 
-运行 `/code-dance` 打开设置列表，
-或直接编辑`~/.pi/agent/code-dance.json`：
+运行 `/real-vibe-coding` 打开设置列表，
+或直接编辑`~/.pi/agent/real-vibe-coding.json`：
 
 ```json
 {
@@ -166,7 +168,7 @@ pi 默认的速度；模型的背压闸门也因此无事可做。再按一次�
 
 ## 实现方式
 
-Pi 没有替换助手消息渲染器的 API，也没有延迟 token 流的手段，因此 CodeDance
+Pi 没有替换助手消息渲染器的 API，也没有延迟 token 流的手段，因此 RealVibeCoding
 使用仅有的三个杠杆：
 
 1. **markdown 转换器把它拦得到的东西换成占位提示。** 也就是助手的正文和思考
@@ -249,7 +251,7 @@ Pi 没有替换助手消息渲染器的 API，也没有延迟 token 流的手段
 硬杀：没有任何清理来收起终端，原始模式、隐藏光标、鼠标跟踪就此留下；之后 shell
 会把每次按键的转义序列原样回显，看起来就是终端在连续打印乱码。
 
-CodeDance 用 pi 的 `tool_call` 事件挡住了这类命令（与演出是否开启无关）：命中的
+RealVibeCoding 用 pi 的 `tool_call` 事件挡住了这类命令（与演出是否开启无关）：命中的
 调用不会执行，模型会收到一条说明，要求它改用按 PID 的杀法——先
 `netstat -ano | findstr :<端口>` 找到 PID，再 `taskkill //F //PID <PID>`。拦截面
 很窄：只有 shell 工具里按名字通杀 node 的写法会被拦，按 PID、或对别的映像名的
@@ -264,7 +266,7 @@ kill，都不受影响。
 - **不做音频/MIDI 合成。** 内置后端播放预渲染好的 `.wav`。要合成 `.mid` 就得
   依赖 SoundFont 音色库，而用户未必有。
 - **不做节拍检测。** MIDI 文件本身就带精确的变速表，分析音频只会引入误差。
-- **不获取真实播放位置。** 默认播放器不回报播放到哪儿了，进度读数由 CodeDance
+- **不获取真实播放位置。** 默认播放器不回报播放到哪儿了，进度读数由 RealVibeCoding
   自己的时钟推算。播放器的启动延迟是恒定偏移，由 `musicSyncOffsetMs` 吸收。
 - **一曲的节奏随它的 MIDI 结束。** 如果 `.wav` 比 `.mid` 长（通常只多几秒的
   尾部余音），打印会暂停到下一首开始。

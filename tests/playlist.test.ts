@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Playlist } from "../extensions/code-dance/playlist.ts";
+import { Playlist } from "../extensions/real-vibe-coding/playlist.ts";
 
 /** A die that walks a fixed list, so a shuffle is reproducible. */
 function dieFrom(values: readonly number[]): () => number {

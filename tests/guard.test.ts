@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { selfKillReason } from "../extensions/code-dance/guard.ts";
+import { selfKillReason } from "../extensions/real-vibe-coding/guard.ts";
 
 /** The guard's answer for a command run through a shell tool. */
 function refuses(command: string, toolName = "bash"): boolean {

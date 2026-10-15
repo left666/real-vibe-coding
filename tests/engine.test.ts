@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import type { TestContext } from "node:test";
 
-import type { AudioBackend, PlaybackResult } from "../extensions/code-dance/audio.ts";
-import { BeatEngine } from "../extensions/code-dance/engine.ts";
-import type { Track } from "../extensions/code-dance/library.ts";
-import type { PlaylistMode } from "../extensions/code-dance/playlist.ts";
+import type { AudioBackend, PlaybackResult } from "../extensions/real-vibe-coding/audio.ts";
+import { BeatEngine } from "../extensions/real-vibe-coding/engine.ts";
+import type { Track } from "../extensions/real-vibe-coding/library.ts";
+import type { PlaylistMode } from "../extensions/real-vibe-coding/playlist.ts";
 import { endOfTrack, header, noteOff, noteOn, sequence, tempo, track } from "./smf.ts";
 
 const PPQ = 480;
@@ -18,7 +18,7 @@ const VELOCITY = 100;
 const made: string[] = [];
 
 function scratch(): string {
-	const dir = mkdtempSync(join(tmpdir(), "code-dance-engine-"));
+	const dir = mkdtempSync(join(tmpdir(), "real-vibe-coding-engine-"));
 	made.push(dir);
 	return dir;
 }
@@ -835,7 +835,7 @@ test("a player that cannot start is reported and ends the performance", async (t
 	await settle();
 
 	assert.deepEqual(backend.played, [join(dir, "First.wav")]);
-	assert.deepEqual(errors, ["code-dance: no player here"]);
+	assert.deepEqual(errors, ["real-vibe-coding: no player here"]);
 	assert.equal(engine.isPlaying, false);
 	assert.equal(backend.stops.count, 1);
 });

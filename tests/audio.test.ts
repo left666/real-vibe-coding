@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createAudioBackend, createCommandBackend, createSoundPlayerBackend, parseCommandTemplate } from "../extensions/code-dance/audio.ts";
+import { createAudioBackend, createCommandBackend, createSoundPlayerBackend, parseCommandTemplate } from "../extensions/real-vibe-coding/audio.ts";
 
 test("a template is split before the file is put in", () => {
 	const { command, args } = parseCommandTemplate('ffplay -nodisp -autoexit "{file}"', "C:\\music\\a.wav");
@@ -49,7 +49,7 @@ test("createAudioBackend picks the backend it is asked for", () => {
 });
 
 test("a player that cannot be started rejects", async () => {
-	const backend = createCommandBackend("definitely-not-a-real-binary-code-dance {file}");
+	const backend = createCommandBackend("definitely-not-a-real-binary-real-vibe-coding {file}");
 	await assert.rejects(backend.play("a.wav"));
 });
 

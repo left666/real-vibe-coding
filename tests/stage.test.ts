@@ -5,9 +5,9 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import type { ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
 
-import type { StageView } from "../extensions/code-dance/engine.ts";
-import { clock, installStage, meter, tailRows } from "../extensions/code-dance/stage.ts";
-import type { StageOptions } from "../extensions/code-dance/stage.ts";
+import type { StageView } from "../extensions/real-vibe-coding/engine.ts";
+import { clock, installStage, meter, tailRows } from "../extensions/real-vibe-coding/stage.ts";
+import type { StageOptions } from "../extensions/real-vibe-coding/stage.ts";
 
 const IDENTITY = { fg: (_color: string, text: string) => text, bold: (text: string) => text } as unknown as Theme;
 
@@ -128,8 +128,8 @@ function harness(options: StageOptions): Harness {
 		setWidget: (key: string, factory: unknown) => void widgetFactories.set(key, factory),
 	} as unknown as ExtensionUIContext;
 
-	const stage = installStage(ui, "code-dance", options);
-	const factory = widgetFactories.get("code-dance") as (tui: TUI, theme: Theme) => Component;
+	const stage = installStage(ui, "real-vibe-coding", options);
+	const factory = widgetFactories.get("real-vibe-coding") as (tui: TUI, theme: Theme) => Component;
 	return { stage, component: factory(tui, IDENTITY), requests, invalidations, widgetFactories };
 }
 
@@ -277,7 +277,7 @@ test("the handle drives the widget and can be disposed", () => {
 	assert.equal(requests.length, 2);
 
 	stage.dispose();
-	assert.equal(widgetFactories.get("code-dance"), undefined);
+	assert.equal(widgetFactories.get("real-vibe-coding"), undefined);
 	// The handle outlives the panel without throwing.
 	stage.requestRender();
 	stage.repaint();

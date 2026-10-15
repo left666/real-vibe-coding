@@ -4,9 +4,9 @@ import { test } from "node:test";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 
-import type { CodeDanceConfig } from "../extensions/code-dance/config.ts";
-import { DEFAULT_CONFIG } from "../extensions/code-dance/config.ts";
-import { registerSettingsCommand } from "../extensions/code-dance/settings.ts";
+import type { RealVibeCodingConfig } from "../extensions/real-vibe-coding/config.ts";
+import { DEFAULT_CONFIG } from "../extensions/real-vibe-coding/config.ts";
+import { registerSettingsCommand } from "../extensions/real-vibe-coding/settings.ts";
 
 const THEME = {
 	fg: (_color: string, text: string) => text,
@@ -21,12 +21,12 @@ const ESC = "\x1b";
 interface Opened {
 	panel: Component;
 	/** What the panel handed to `onConfigChanged`, in order. */
-	changes: CodeDanceConfig[];
+	changes: RealVibeCodingConfig[];
 }
 
 /** Open the panel the way the command does, and hand back the component to drive. */
-async function open(config: CodeDanceConfig, names: readonly string[]): Promise<Opened> {
-	const changes: CodeDanceConfig[] = [];
+async function open(config: RealVibeCodingConfig, names: readonly string[]): Promise<Opened> {
+	const changes: RealVibeCodingConfig[] = [];
 	let handler: ((args: string, ctx: ExtensionContext) => Promise<void>) | undefined;
 	registerSettingsCommand(
 		{

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import codeDance from "../extensions/code-dance/index.ts";
-import { stagedNotice } from "../extensions/code-dance/parts.ts";
+import realVibeCoding from "../extensions/real-vibe-coding/index.ts";
+import { stagedNotice } from "../extensions/real-vibe-coding/parts.ts";
 import { endOfTrack, header, noteOff, noteOn, sequence, track } from "./smf.ts";
 
 interface Stub {
@@ -44,14 +44,14 @@ const PACKAGED = ["Angry Birds.mid", "Elysium.mid", "Graze The Roof.mid", "He's 
  * the playlist picks leads the same life.
  */
 function shadowLibrary(agentDir: string, beat: Uint8Array): void {
-	const music = join(agentDir, "code-dance", "music");
+	const music = join(agentDir, "real-vibe-coding", "music");
 	mkdirSync(music, { recursive: true });
 	for (const name of PACKAGED) writeFileSync(join(music, name), beat);
 }
 
 function extension(): Stub {
 	const stub: Stub = { events: new Map(), transformers: [], shortcuts: [], commands: [], tools: [] };
-	codeDance({
+	realVibeCoding({
 		on: (name: string, handler: (event: unknown, ctx: unknown) => unknown) => void stub.events.set(name, handler),
 		registerMarkdownTransformer: (transformer: (markdown: string, context: TransformerContext) => string) =>
 			void stub.transformers.push(transformer),
@@ -86,7 +86,7 @@ test("the extension registers the whole surface it needs", () => {
 		stub.shortcuts.map((shortcut) => shortcut.key),
 		["ctrl+alt+d", "ctrl+alt+p", "ctrl+alt+n"],
 	);
-	assert.deepEqual(stub.commands, ["code-dance"]);
+	assert.deepEqual(stub.commands, ["real-vibe-coding"]);
 });
 
 test("the guard refuses a command that would kill pi with the rest of node", async () => {
@@ -164,7 +164,7 @@ test("outside a terminal session the extension only watches", async () => {
 });
 
 test("the stage is mounted with the task's first output and taken down when it ends", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -204,7 +204,7 @@ test("the stage is mounted with the task's first output and taken down when it e
 
 	// The footer marker stands in for the stage on the empty screen.
 	assert.equal(statuses.length, 1);
-	assert.equal(statuses[0]!.key, "code-dance");
+	assert.equal(statuses[0]!.key, "real-vibe-coding");
 	assert.equal(statuses[0]!.text, "♪ performance mode");
 
 	await stub.events.get("message_start")!({ message: { role: "assistant" } }, ctx);
@@ -212,7 +212,7 @@ test("the stage is mounted with the task's first output and taken down when it e
 
 	// The first output mounts it.
 	assert.equal(widgets.length, 1);
-	assert.equal(widgets[0]!.key, "code-dance");
+	assert.equal(widgets[0]!.key, "real-vibe-coding");
 	assert.equal(typeof widgets[0]!.factory, "function");
 
 	// The task is over; the first strike lands a beat later and takes the stage
@@ -224,7 +224,7 @@ test("the stage is mounted with the task's first output and taken down when it e
 	}
 
 	assert.equal(widgets.length, 2);
-	assert.equal(widgets[1]!.key, "code-dance");
+	assert.equal(widgets[1]!.key, "real-vibe-coding");
 	assert.equal(widgets[1]!.factory, undefined);
 	assert.equal(
 		stub.transformers[0]!("real text", { messageType: "assistant", isStreaming: false, availableWidth: 80 }),
@@ -235,12 +235,12 @@ test("the stage is mounted with the task's first output and taken down when it e
 
 	// The marker goes with the session.
 	assert.equal(statuses.length, 2);
-	assert.equal(statuses[1]!.key, "code-dance");
+	assert.equal(statuses[1]!.key, "real-vibe-coding");
 	assert.equal(statuses[1]!.text, undefined);
 });
 
 test("a part stands in until the music has printed it, then swaps itself back", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -300,7 +300,7 @@ test("a part stands in until the music has printed it, then swaps itself back", 
 });
 
 test("the pause shortcut holds the music while the printing runs on at pi's pace", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -390,7 +390,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 });
 
 test("the next-track shortcut is silent while the music plays and speaks under the hold", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -447,7 +447,7 @@ test("the next-track shortcut is silent while the music plays and speaks under t
 });
 
 test("the dry wait is named: the running tool first, the model after", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -528,7 +528,7 @@ test("the dry wait is named: the running tool first, the model after", async (t)
 });
 
 test("a tool block stands in until the stage has printed it, then renders itself", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -630,7 +630,7 @@ test("a tool block stands in until the stage has printed it, then renders itself
 });
 
 test("the content of a read file is not performed", async (t) => {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {
@@ -720,7 +720,7 @@ test("the content of a read file is not performed", async (t) => {
 
 /** A stage harness over the beats, the stub and the panel, for one tool's result. */
 async function staged(t: { after(fn: () => void): void }, args: Record<string, unknown>, name: string) {
-	const agentDir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const agentDir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	t.after(() => {

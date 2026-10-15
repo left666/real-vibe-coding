@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { readTimeline } from "../extensions/code-dance/midi.ts";
+import { readTimeline } from "../extensions/real-vibe-coding/midi.ts";
 import { endOfTrack, header, meta, noteOff, noteOn, sequence, sysex, tempo, track, u32, vlq } from "./smf.ts";
 
 const PPQ = 480;
@@ -188,6 +188,30 @@ test("format 1 merges the tracks into one order", () => {
 		[0, 500, 1000],
 	);
 	close(timeline.duration, 1);
+});
+
+test("a track with no notes does not stretch the file past the music", () => {
+	// The conductor track's writer left its declared end far past the music — it
+	// holds the tempo map and nothing to play, so where it ends says nothing.
+	const file = sequence(
+		header(1, 2, PPQ),
+		track(tempo(0, 500_000), endOfTrack(4000 * PPQ)),
+		track(noteOn(0, 60, 100), noteOff(PPQ, 60), endOfTrack()),
+	);
+
+	close(readTimeline(file).duration, 0.5);
+});
+
+test("the declared end of a track that carries the music still counts", () => {
+	// Notes stop after half a second, but the music track says its silence runs to
+	// two: that is the track's length, trailing silence and all.
+	const file = sequence(
+		header(1, 2, PPQ),
+		track(tempo(0, 500_000), endOfTrack()),
+		track(noteOn(0, 60, 100), noteOff(PPQ, 60), endOfTrack(3 * PPQ)),
+	);
+
+	close(readTimeline(file).duration, 2);
 });
 
 test("a note-on with velocity zero is a note-off", () => {

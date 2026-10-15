@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { after, test } from "node:test";
 
-import { USER_MUSIC_DIR, bundledMusicDir, collectTracks, userMusicDir } from "../extensions/code-dance/library.ts";
+import { USER_MUSIC_DIR, bundledMusicDir, collectTracks, userMusicDir } from "../extensions/real-vibe-coding/library.ts";
 
 const made: string[] = [];
 
 function scratch(): string {
-	const dir = mkdtempSync(join(tmpdir(), "code-dance-"));
+	const dir = mkdtempSync(join(tmpdir(), "real-vibe-coding-"));
 	made.push(dir);
 	return dir;
 }

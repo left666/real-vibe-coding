@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { OutputFeed } from "../extensions/code-dance/feed.ts";
-import type { FeedChunk, SealedUnit, StreamDelta } from "../extensions/code-dance/feed.ts";
-import { partKey, performedParts } from "../extensions/code-dance/parts.ts";
+import { OutputFeed } from "../extensions/real-vibe-coding/feed.ts";
+import type { FeedChunk, SealedUnit, StreamDelta } from "../extensions/real-vibe-coding/feed.ts";
+import { partKey, performedParts } from "../extensions/real-vibe-coding/parts.ts";
 
 interface Delivery {
 	chunks: FeedChunk[];

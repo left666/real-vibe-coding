@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-import { CONFIG_FILE, DEFAULT_CONFIG, configPath, ensureConfigFile, loadConfig, normalizeConfig, saveConfig } from "../extensions/code-dance/config.ts";
+import { CONFIG_FILE, DEFAULT_CONFIG, configPath, ensureConfigFile, loadConfig, normalizeConfig, saveConfig } from "../extensions/real-vibe-coding/config.ts";
 
 const made: string[] = [];
 
 function scratch(): string {
-	const dir = mkdtempSync(join(tmpdir(), "code-dance-config-"));
+	const dir = mkdtempSync(join(tmpdir(), "real-vibe-coding-config-"));
 	made.push(dir);
 	return dir;
 }
@@ -122,7 +122,7 @@ test("a broken file warns and falls back", () => {
 	const config = loadConfig(agent, (message, level) => warnings.push(`${level}: ${message}`));
 	assert.deepEqual(config, DEFAULT_CONFIG);
 	assert.equal(warnings.length, 1);
-	assert.match(warnings[0]!, /^warning: code-dance: config could not be parsed/);
+	assert.match(warnings[0]!, /^warning: real-vibe-coding: config could not be parsed/);
 });
 
 test("what was saved is what is loaded", () => {

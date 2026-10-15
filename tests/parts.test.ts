@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { callLine, countLines, partKey, performedParts, printingCall, printingNotice, stagedCall, stagedNotice, toolCallText } from "../extensions/code-dance/parts.ts";
+import { callLine, countLines, partKey, performedParts, printingCall, printingNotice, stagedCall, stagedNotice, toolCallText } from "../extensions/real-vibe-coding/parts.ts";
 
 test("partKey is stable, short and distinct", () => {
 	assert.equal(partKey("hello"), partKey("hello"));
