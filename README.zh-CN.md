@@ -2,13 +2,13 @@
 
 [English](README.md)
 
-一个Pi扩展，让对话里出现的一切都跟着音乐的节拍、一个 token 一个 token 或整行地浮现。
+一个[Pi](https://pi.dev/)扩展，让对话里出现的一切都跟着音乐的节拍、一个 token 一个 token 或整行地浮现。
 RealVibeCoding 用 MIDI 文件作为节奏基准，播放同名音频，并在编辑器上方的舞台面板里按拍揭示
 Pi 会打印的内容——助手的正文、思考过程、每一次工具调用那一行。
 
 ## 效果
 
-[演示视频](docs/demonstration.mp4)
+https://github.com/user-attachments/assets/d7bc2118-e3bb-4283-a7cf-eb09bee1271c
 
 ```
 ♪ He's a Pirate · 200 BPM · 0:42/1:17 · sequential

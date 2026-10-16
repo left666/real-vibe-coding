@@ -1,6 +1,6 @@
 {
 	"name": "real-vibe-coding",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "A Pi extension that performs the agent's output — prose, reasoning and tool text alike — in time with MIDI music: a beat-synced stage panel, a look-ahead print queue, and a pluggable audio backend.",
 	"type": "module",
 	"keywords": [
@@ -16,6 +16,7 @@
 	"files": [
 		"extensions/",
 		"music/",
+		"README.md",
 		"README.zh-CN.md"
 	],
 	"scripts": {

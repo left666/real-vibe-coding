@@ -2,12 +2,12 @@
 
 [中文](README.zh-CN.md)
 
-A Pi extension that makes everything appearing in the conversation emerge to the beat of music — one token at a time, or one whole line at a time.
+A [Pi](https://pi.dev/) extension that makes everything appearing in the conversation emerge to the beat of music — one token at a time, or one whole line at a time.
 RealVibeCoding uses a MIDI file as its rhythmic reference, plays the audio file of the same name, and reveals what Pi prints on a stage panel above the editor — the assistant's prose, its reasoning, every line of every tool call.
 
 ## In action
 
-[Demonstration video](docs/demonstration.mp4)
+https://github.com/user-attachments/assets/d7bc2118-e3bb-4283-a7cf-eb09bee1271c
 
 ```
 ♪ He's a Pirate · 200 BPM · 0:42/1:17 · sequential
