@@ -13,6 +13,10 @@
 		"tui"
 	],
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/left666/real-vibe-coding.git"
+	},
 	"files": [
 		"extensions/",
 		"music/",
