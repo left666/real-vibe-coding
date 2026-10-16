@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
 import realVibeCoding from "../extensions/real-vibe-coding/index.ts";
+import { bundledMusicDir } from "../extensions/real-vibe-coding/library.ts";
 import { stagedNotice } from "../extensions/real-vibe-coding/parts.ts";
 import { endOfTrack, header, noteOff, noteOn, sequence, track } from "./smf.ts";
 
@@ -35,18 +36,29 @@ const PLAIN_THEME = {
 	bold: (text: string) => text,
 };
 
-/** Every track the package ships; each is one the playlist may reach for. */
-const PACKAGED = ["Angry Birds.mid", "Elysium.mid", "Graze The Roof.mid", "He's a Pirate.mid", "Night Cruising.mid"];
+/** The `.mid`/`.midi` names in a directory; none at all when it cannot be read. */
+function midiNames(dir: string): string[] {
+	try {
+		return readdirSync(dir).filter((name) => /\.midi?$/i.test(name));
+	} catch {
+		return [];
+	}
+}
 
 /**
- * Shadow every packaged track with one of the test's own — no `.wav` beside it,
- * so the clock is the MIDI's and nothing reaches the speakers. Whichever name
- * the playlist picks leads the same life.
+ * Shadow every track the package ships with one of the test's own — no `.wav`
+ * beside it, so the clock is the MIDI's and nothing reaches the speakers.
+ * Whichever name the playlist picks leads the same life.
+ *
+ * The names are read from the packaged library rather than kept in a list here:
+ * shadowing is what keeps a real `.wav` out of the engine's hands, so a track
+ * that ships and is not shadowed is a `.wav` handed to a player the test cannot
+ * run — and the whole performance ends before it prints.
  */
 function shadowLibrary(agentDir: string, beat: Uint8Array): void {
 	const music = join(agentDir, "real-vibe-coding", "music");
 	mkdirSync(music, { recursive: true });
-	for (const name of PACKAGED) writeFileSync(join(music, name), beat);
+	for (const name of midiNames(bundledMusicDir())) writeFileSync(join(music, name), beat);
 }
 
 function extension(): Stub {
@@ -348,6 +360,10 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 		PLAIN_THEME,
 	);
 	const lines = () => component.render(60);
+	// The header row alone, drawn wide: at 60 columns a long track name runs the
+	// row out of room and cuts the marker off its end, and the words are what is
+	// being asserted here.
+	const headerRow = () => component.render(200)[0]!;
 	// Everything under the meter: the text rows, and — while held — the wait that
 	// closes the panel.
 	const tail = () => lines().slice(2).join("\n");
@@ -364,7 +380,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	// printing is not the thing being held.
 	const pause = stub.shortcuts.find((shortcut) => shortcut.key === "ctrl+alt+p")!;
 	await pause.handler();
-	assert.match(lines()[0]!, /⏸ paused/);
+	assert.match(headerRow(), /⏸ paused/);
 	assert.match(lines().at(-1)!, /printing goes on/);
 	assert.match(lines().at(-1)!, /ctrl\+alt\+p to resume/);
 	assert.deepEqual(notifications, ["♪ performance paused · printing goes on"]);
@@ -375,7 +391,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	const held = tail();
 	await new Promise((resolve) => setTimeout(resolve, 800));
 	assert.equal(tail(), held);
-	assert.match(lines()[0]!, /⏸ paused/);
+	assert.match(headerRow(), /⏸ paused/);
 
 	// Let it go: the music takes over again, and the settled task's empty queue
 	// is what ends the performance — the stage comes down and the text is back.
@@ -384,7 +400,7 @@ test("the pause shortcut holds the music while the printing runs on at pi's pace
 	await stub.events.get("agent_settled")!({}, ctx);
 	assert.ok(await until(() => widgets.length === 2), "the performance should end once the task has settled");
 	assert.equal(widgets[1]!.factory, undefined);
-	assert.match(lines()[0]!, /♪ waiting for output…/);
+	assert.match(headerRow(), /♪ waiting for output…/);
 
 	await stub.events.get("session_shutdown")!({}, ctx);
 });
